@@ -1,0 +1,52 @@
+:root{--bg:#f3f5f8;--card:#fff;--ink:#1f2a37;--mut:#64748b;--line:#e2e8f0;--head:#1a5276;--acc:#e67e22;--pos:#2e7d32;--neg:#c62828;--ig:#8e44ad;--tt:#16a085;--x:#34495e}
+*{box-sizing:border-box}
+body{margin:0;font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;background:var(--bg);color:var(--ink);line-height:1.45}
+header{background:var(--head);color:#fff;display:flex;align-items:center;gap:16px;padding:0 20px;flex-wrap:wrap}
+header h1{font-size:1.05rem;margin:0;padding:14px 0;font-weight:700;white-space:nowrap}
+nav{display:flex;gap:4px;flex:1;flex-wrap:wrap}
+nav a{color:#fff;text-decoration:none;padding:16px 14px;font-weight:600;font-size:.95rem;border-bottom:3px solid transparent}
+nav a.on{color:#ffd9a8;border-color:var(--acc)}
+nav a:hover{background:rgba(255,255,255,.08)}
+.usr{font-size:.85rem;display:flex;gap:10px;align-items:center}
+.usr .rl{background:rgba(255,255,255,.18);border-radius:10px;padding:2px 9px;font-size:.75rem}
+.usr a{color:#ffd9a8}
+main{max-width:1200px;margin:0 auto;padding:20px 16px 40px}
+h2{font-size:1.25rem;margin:0 0 14px}
+.grid{display:grid;gap:16px}
+.g4{grid-template-columns:repeat(4,1fr)}.g2{grid-template-columns:1fr 1fr}.g3{grid-template-columns:repeat(3,1fr)}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px;box-shadow:0 1px 3px rgba(15,23,42,.06)}
+.kpi{border-left:4px solid var(--acc)}
+.app .pct{font-size:2rem;font-weight:700;color:var(--ink)}.app .pct small{font-size:.85rem;font-weight:400;color:var(--mut)}
+.meter{display:flex;height:10px;border-radius:6px;overflow:hidden;margin:8px 0}.meter i{display:block}
+.hl{display:none;background:#fff4e5;border:1px solid #f5d3a6;border-radius:10px;padding:10px 14px;margin-bottom:16px;font-size:.92rem}
+.card h3{margin:0 0 10px;font-size:1rem;color:var(--head)}
+.kpi small{color:var(--mut);text-transform:uppercase;font-size:.7rem;letter-spacing:.04em}
+.kpi b{display:block;font-size:1.9rem;color:var(--head);margin:4px 0 2px}
+.kpi span{font-size:.8rem;color:var(--mut)}
+.bar{display:flex;gap:10px;flex-wrap:wrap;align-items:end;margin-bottom:16px}
+.bar label{font-size:.8rem;color:var(--mut);display:flex;flex-direction:column;gap:3px}
+select,input[type=date],input[type=text],input[type=password],input[type=file]{padding:8px 10px;border:1px solid #cbd5e1;border-radius:7px;font:inherit;background:#fff}
+button,.btn{background:var(--acc);color:#fff;border:0;border-radius:7px;padding:9px 16px;font:inherit;font-weight:600;cursor:pointer}
+button.sec{background:#e2e8f0;color:var(--ink)}
+table{border-collapse:collapse;width:100%;font-size:.88rem}
+th,td{padding:8px 10px;border-bottom:1px solid var(--line);text-align:right}
+th:first-child,td:first-child,th.l,td.l{text-align:left}
+th{color:var(--head);font-size:.78rem;text-transform:uppercase}
+tr.best td{background:#eaf6ec;font-weight:600}
+tr.cmp td{color:var(--mut);font-style:italic}
+.tw{overflow-x:auto}
+.chart{position:relative;height:300px}
+ul.ins{margin:0;padding-left:18px}ul.ins li{margin:6px 0}
+.pill{display:inline-block;border-radius:10px;padding:1px 9px;font-size:.75rem;font-weight:600}
+.pill.ok{background:#eaf6ec;color:var(--pos)}.pill.no{background:#fdecea;color:var(--neg)}.pill.wt{background:#fff4e5;color:#b9660b}
+.note{font-size:.8rem;color:var(--mut)}
+.login{max-width:380px;margin:9vh auto;background:#fff;border:1px solid var(--line);border-radius:12px;padding:28px}
+.login h1{font-size:1.2rem;color:var(--head);margin:0 0 4px}
+.login label{display:block;margin:14px 0 4px;font-size:.85rem}
+.login input{width:100%}.login button{width:100%;margin-top:18px}
+.err{background:#fdecea;color:var(--neg);padding:8px 10px;border-radius:7px;margin-top:12px;font-size:.88rem}
+.okmsg{background:#eaf6ec;color:var(--pos);padding:8px 10px;border-radius:7px;margin-top:12px;font-size:.88rem}
+.mobonly{display:none}
+@media(max-width:900px){.g3{grid-template-columns:1fr}.g4{grid-template-columns:1fr 1fr}.g2{grid-template-columns:1fr}}
+@media(max-width:560px){nav{flex-basis:100%;flex-wrap:nowrap;overflow-x:auto;order:3}nav a{white-space:nowrap}nav a[href='/admin']{display:none}header h1{padding:10px 0 4px}.usr{margin-left:auto}.g4{grid-template-columns:1fr}.chart{height:260px}header{padding:0 12px}nav a{padding:12px 9px;font-size:.85rem}.kpi b{font-size:1.6rem}
+ .desktoponly{display:none!important}.mobonly{display:block}}
