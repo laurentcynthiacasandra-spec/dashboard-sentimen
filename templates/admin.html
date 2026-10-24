@@ -1,0 +1,25 @@
+{% extends "base.html" %}{% block body %}<div class="mobonly card"><h2>Hanya desktop</h2><p>Halaman Admin hanya dapat diakses melalui perangkat desktop.</p></div>
+<div class="desktoponly"><h2>Admin - Impor Data dan Pelatihan Ulang Model</h2>
+<div class="card"><h3>Unggah Data Ulasan Baru</h3><p class="note">Berkas .xlsx atau .csv dengan kolom wajib: <code>content</code>, <code>score</code>, <code>at</code>.</p>
+<form id="f" class="bar"><label>Berkas<input type="file" name="berkas" accept=".xlsx,.csv"></label><label>Aplikasi target<select name="aplikasi" id="fa"></select></label><button type="submit">Unggah dan Validasi</button></form><div id="msg"></div></div>
+<div class="card" style="margin-top:16px"><h3>Kelola Pengguna</h3><p class="note">Admin menambah akun, mengganti password atau peran, dan menghapus akun. Password minimal 6 karakter.</p>
+<form id="uf" class="bar"><label>Username<input name="username" type="text" autocomplete="off" required></label><label>Password<input name="password" type="password" autocomplete="new-password" required></label><label>Peran<select name="role"><option>Pengguna</option><option>Admin</option></select></label><button type="submit">Tambah Akun</button></form><div id="umsg"></div>
+<div class="tw"><table id="ut"></table></div></div>
+<div class="card" style="margin-top:16px"><h3>Riwayat Unggahan dan Pelatihan</h3><div class="tw"><table id="tb"></table></div></div></div>{% endblock %}
+{% block js %}<script>
+const $=i=>document.getElementById(i);
+async function riw(){const d=await api('/api/admin/riwayat');$('tb').innerHTML='<tr><th>Waktu</th><th class="l">Pengguna</th><th class="l">Aplikasi</th><th class="l">Berkas</th><th>Baris</th><th class="l">Status</th><th class="l">Catatan</th></tr>'+(d.length?d.map(r=>`<tr><td>${r.waktu}</td><td class="l">${r.user||''}</td><td class="l">${r.aplikasi||''}</td><td class="l">${r.berkas||''}</td><td>${r.baris}</td><td class="l"><span class="pill ${r.status=='Ditolak'?'no':'ok'}">${r.status}</span></td><td class="l">${r.catatan||''}</td></tr>`).join(''):'<tr><td colspan="7" class="l">Belum ada riwayat.</td></tr>')}
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const pesan=(ok,t)=>{$('umsg').innerHTML=`<div class="${ok?'okmsg':'err'}">${esc(t)}</div>`};
+async function kirim(url,method,body){const r=await fetch(url,{method,headers:{'Content-Type':'application/json'},body:body?JSON.stringify(body):undefined});const j=await r.json().catch(()=>({}));pesan(r.ok,r.ok?j.pesan:(j.error||'Gagal'));await usr();return r.ok}
+async function usr(){const d=await api('/api/admin/users');
+$('ut').innerHTML='<tr><th class="l">Username</th><th class="l">Peran</th><th class="l">Aksi</th></tr>'+d.map(u=>`<tr><td class="l">${esc(u.username)}${u.saya?' (Anda)':''}</td><td class="l"><span class="pill ${u.role=='Admin'?'wt':'ok'}">${u.role}</span></td><td class="l"><button type="button" class="sec" data-a="pw" data-id="${u.id}">Ganti password</button> <button type="button" class="sec" data-a="rl" data-id="${u.id}" data-r="${u.role}">Jadikan ${u.role=='Admin'?'Pengguna':'Admin'}</button> ${u.saya?'':`<button type="button" class="sec" data-a="del" data-id="${u.id}" data-n="${esc(u.username)}">Hapus</button>`}</td></tr>`).join('')}
+$('ut').onclick=async e=>{const b=e.target.closest('button');if(!b)return;const id=b.dataset.id;
+if(b.dataset.a=='pw'){const p=prompt('Password baru (minimal 6 karakter):');if(p)await kirim('/api/admin/users/'+id,'PUT',{password:p})}
+else if(b.dataset.a=='rl'){await kirim('/api/admin/users/'+id,'PUT',{role:b.dataset.r=='Admin'?'Pengguna':'Admin'})}
+else if(b.dataset.a=='del'){if(confirm('Hapus akun '+b.dataset.n+'?'))await kirim('/api/admin/users/'+id,'DELETE')}};
+$('uf').onsubmit=async e=>{e.preventDefault();const f=new FormData($('uf'));if(await kirim('/api/admin/users','POST',Object.fromEntries(f)))$('uf').reset()};
+(async()=>{usr();const M=await api('/api/meta');fill($('fa'),M.aplikasi);riw();
+$('f').onsubmit=async e=>{e.preventDefault();const r=await fetch('/api/admin/upload',{method:'POST',body:new FormData($('f'))});const j=await r.json();
+$('msg').innerHTML=r.ok?`<div class="okmsg">${j.pesan}</div>`:`<div class="err">${j.error}</div>`;riw()}})();
+</script>{% endblock %}

@@ -1,0 +1,15 @@
+{% extends "base.html" %}{% block body %}<h2>Ringkasan Insight Utama</h2>
+<div class="grid g4" id="kpi"></div>
+<div class="grid g3" id="apps" style="margin-top:16px"></div>
+<div class="grid g2" style="margin-top:16px"><div class="card"><h3>Persentase Sentimen Positif per Aplikasi</h3><div class="chart"><canvas id="c1"></canvas></div></div>
+<div class="card"><h3>Distribusi Sentimen Keseluruhan</h3><div class="chart"><canvas id="c2"></canvas></div></div></div>
+<div class="card" style="margin-top:16px"><h3>Insight Utama</h3><ul class="ins" id="ins"></ul><p class="note">Label sentimen berasal dari pelabelan hybrid (leksikon InSet + rating); lihat halaman Performa Algoritma untuk kualitas model.</p></div>{% endblock %}
+{% block js %}<script>
+(async()=>{const d=await api('/api/ringkasan');
+document.getElementById('kpi').innerHTML=[['Total ulasan dianalisis',fmt(d.total),d.per_app.length+' aplikasi'],['Rata-rata sentimen positif',d.persen_positif+'%','dari seluruh ulasan'],
+['Model terbaik',[...new Set(d.terbaik.map(t=>t.model.split(' (')[0]))].join(' / ')||'-','berdasarkan macro-F1'],['Data terakhir',d.tanggal_terakhir,'tanggal ulasan terbaru']].map(k=>`<div class="card kpi"><small>${k[0]}</small><b>${k[1]}</b><span>${k[2]}</span></div>`).join('');
+document.getElementById('apps').innerHTML=d.per_app.map(a=>{const c=APPCOL[a.aplikasi]||'#888';return `<div class="card app" style="border-top:4px solid ${c}"><h3 style="color:${c}">${a.aplikasi}</h3><div class="pct">${a.persen_positif}%<small> positif</small></div><div class="meter"><i style="width:${a.persen_positif}%;background:${COL.Positif}"></i><i style="width:${100-a.persen_positif}%;background:${COL.Negatif}"></i></div><p class="note">${fmt(a.positif)} positif &middot; ${fmt(a.negatif)} negatif &middot; ${fmt(a.positif+a.negatif)} ulasan</p></div>`}).join('');
+draw('c1',{type:'bar',data:{labels:d.per_app.map(a=>a.aplikasi),datasets:[{data:d.per_app.map(a=>a.persen_positif),backgroundColor:d.per_app.map(a=>APPCOL[a.aplikasi]||'#888')}]},options:{indexAxis:'y',plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>c.raw+'% positif'}}},scales:{x:{min:0,max:100,ticks:{callback:v=>v+'%'}}}}});
+draw('c2',{type:'doughnut',data:{labels:['Positif ('+fmt(d.positif)+')','Negatif ('+fmt(d.negatif)+')'],datasets:[{data:[d.positif,d.negatif],backgroundColor:[COL.Positif,COL.Negatif]}]},options:{plugins:{legend:{position:'bottom'}}}});
+document.getElementById('ins').innerHTML=d.insight.map(i=>`<li>${i}</li>`).join('')})();
+</script>{% endblock %}

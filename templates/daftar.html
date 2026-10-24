@@ -1,0 +1,7 @@
+{% extends "base.html" %}{% block title %}Daftar - Dashboard Analisis Sentimen{% endblock %}
+{% block body %}<form class="login" method="post"><h1>Buat Akun</h1><div class="note">Akun baru berperan Pengguna (dapat melihat seluruh dashboard).</div>
+<label for="u">Username</label><input id="u" name="username" type="text" autocomplete="username" value="{{ u }}" required autofocus>
+<label for="p">Password (minimal 8 karakter)</label><input id="p" name="password" type="password" autocomplete="new-password" required>
+<label for="p2">Ulangi password</label><input id="p2" name="password2" type="password" autocomplete="new-password" required>
+<button type="submit">Daftar</button>{% if err %}<div class="err">{{ err }}</div>{% endif %}
+<p class="note" style="text-align:center;margin-top:16px">Sudah punya akun? <a href="/login">Masuk</a></p></form>{% endblock %}

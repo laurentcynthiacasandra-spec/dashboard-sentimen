@@ -1,0 +1,8 @@
+<!doctype html><html lang="id"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{% block title %}Dashboard Analisis Sentimen{% endblock %}</title><link rel="stylesheet" href="{{ url_for('static',filename='style.css') }}"></head><body>
+{% if user %}<header><h1>Dashboard Analisis Sentimen</h1>
+<nav><a href="/ringkasan" class="{{ 'on' if aktif=='ringkasan' }}">Ringkasan</a><a href="/sentimen" class="{{ 'on' if aktif=='sentimen' }}">Perbandingan Sentimen</a><a href="/performa" class="{{ 'on' if aktif=='performa' }}">Performa Algoritma</a>{% if role=='Admin' %}<a href="/admin" class="{{ 'on' if aktif=='admin' }}">Admin</a>{% endif %}</nav>
+<div class="usr"><span>{{ user }}</span><span class="rl">{{ role }}</span><a href="/logout">Keluar</a></div></header>{% endif %}
+<main>{% block body %}{% endblock %}</main>
+{% if user %}<script src="{{ url_for('static',filename='chart.umd.js') }}"></script><script src="{{ url_for('static',filename='common.js') }}"></script>{% block js %}{% endblock %}{% endif %}
+</body></html>

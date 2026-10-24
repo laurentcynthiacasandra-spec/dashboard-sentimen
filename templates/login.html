@@ -1,0 +1,6 @@
+{% extends "base.html" %}{% block title %}Masuk - Dashboard Analisis Sentimen{% endblock %}
+{% block body %}<form class="login" method="post"><h1>Dashboard Analisis Sentimen</h1><div class="note">Instagram, TikTok, dan X (Google Play Store)</div>
+<label for="u">Username</label><input id="u" name="username" type="text" autocomplete="username" required autofocus>
+<label for="p">Password</label><input id="p" name="password" type="password" autocomplete="current-password" required>
+<button type="submit">Masuk</button>{% if info %}<div class="okmsg">{{ info }}</div>{% endif %}{% if err %}<div class="err">{{ err }}</div>{% endif %}
+{% if daftar %}<p class="note" style="text-align:center;margin-top:16px">Belum punya akun? <a href="/daftar">Daftar di sini</a></p>{% endif %}</form>{% endblock %}

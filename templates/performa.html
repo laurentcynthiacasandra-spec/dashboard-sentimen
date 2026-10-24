@@ -1,0 +1,17 @@
+{% extends "base.html" %}{% block body %}<h2>Perbandingan Performa Algoritma</h2>
+<div class="bar"><label>Aplikasi<select id="fa"></select></label><label>Algoritma<select id="fm"></select></label></div>
+<div class="card"><h3>Tabel Perbandingan Metrik Evaluasi (data uji)</h3><div class="tw"><table id="tb"></table></div>
+<p class="note">Model terbaik ditentukan berdasarkan macro-F1; selisih kurang dari 0,01 dianggap setara.</p></div>
+<div class="grid g2" style="margin-top:16px"><div class="card"><h3>Grafik Macro-F1 per Aplikasi</h3><div class="chart"><canvas id="c1"></canvas></div></div>
+<div class="card"><h3>Rekomendasi Algoritma</h3><div id="rek"></div><h3 style="margin-top:16px">Confusion Matrix</h3><div class="tw"><table id="cm"></table></div></div></div>{% endblock %}
+{% block js %}<script>
+const $=i=>document.getElementById(i);let D;
+function cm(){const r=D.metrik.filter(x=>(!$('fa').value||x.id_aplikasi==$('fa').value)&&(!$('fm').value||x.id_model==$('fm').value));
+$('cm').innerHTML=r.length==1?`<tr><th></th><th>Prediksi Positif</th><th>Prediksi Negatif</th></tr><tr><td>Aktual Positif</td><td>${fmt(r[0].tp)}</td><td>${fmt(r[0].fn)}</td></tr><tr><td>Aktual Negatif</td><td>${fmt(r[0].fp)}</td><td>${fmt(r[0].tn)}</td></tr>`:'<tr><td class="l">Pilih satu aplikasi dan satu algoritma untuk melihat confusion matrix.</td></tr>'}
+async function load(){const q=$('fa').value?'?app='+$('fa').value:'';D=await api('/api/performa'+q);const f=D.metrik.filter(x=>!$('fm').value||x.id_model==$('fm').value);
+$('tb').innerHTML='<tr><th>Aplikasi</th><th class="l">Algoritma</th><th>Accuracy</th><th>Precision</th><th>Recall</th><th>F1</th><th>Macro-F1</th></tr>'+(f.length?f.map(r=>`<tr class="${r.terbaik?'best':r.pembanding?'cmp':''}"><td>${r.aplikasi}</td><td class="l">${r.model}${r.terbaik?' ★':''}</td><td>${r.accuracy.toFixed(4)}</td><td>${r.precision.toFixed(4)}</td><td>${r.recall.toFixed(4)}</td><td>${r.f1.toFixed(4)}</td><td>${r.macro_f1.toFixed(4)}</td></tr>`).join(''):'<tr><td colspan="7" class="l">Data tidak tersedia.</td></tr>');
+const apps=[...new Set(f.map(r=>r.aplikasi))],mods=[...new Set(D.metrik.filter(x=>!x.pembanding).map(r=>r.model))];const pal=['#e67e22','#1a5276'];
+draw('c1',{type:'bar',data:{labels:apps,datasets:mods.map((m,i)=>({label:m,backgroundColor:pal[i%2],data:apps.map(a=>(f.find(r=>r.aplikasi==a&&r.model==m)||{}).macro_f1??null)}))},options:{scales:{y:{min:0,max:1}},plugins:{legend:{position:'bottom'}}}});
+$('rek').innerHTML=D.rekomendasi.map(r=>`<p><b>${r.aplikasi}:</b> <span class="pill ${r.rekomendasi=='Setara'?'wt':'ok'}">${r.rekomendasi}</span><br><span class="note">${r.keterangan}</span></p>`).join('')||'<p class="note">Tidak ada data.</p>';cm()}
+(async()=>{const M=await api('/api/meta');fill($('fa'),M.aplikasi,'Semua aplikasi');fill($('fm'),M.model,'Semua algoritma');$('fa').onchange=load;$('fm').onchange=()=>{load()};load()})();
+</script>{% endblock %}

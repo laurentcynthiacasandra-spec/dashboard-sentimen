@@ -1,0 +1,28 @@
+{% extends "base.html" %}{% block body %}<h2>Perbandingan Sentimen</h2>
+<div class="bar"><label>Aplikasi<select id="fa"></select></label><label>Tahun<select id="ft"></select></label><label>Dari tanggal<input type="date" id="fd"></label><label>Sampai tanggal<input type="date" id="fs"></label>
+<label>Sumber label<select id="fsrc"><option value="aktual">Hasil pelabelan (semua ulasan)</option><option value="prediksi">Prediksi model (data uji)</option></select></label>
+<label id="lm" style="display:none">Algoritma<select id="fm"></select></label><button class="sec" id="rst">Atur ulang</button></div>
+<div class="hl" id="hl"></div>
+<div class="grid g2"><div class="card"><h3>Proporsi Sentimen Positif vs Negatif</h3><div class="chart"><canvas id="c1"></canvas></div></div>
+<div class="card"><h3>Tren Jumlah Ulasan per Bulan</h3><div class="chart"><canvas id="c2"></canvas></div></div></div>
+<div class="card" style="margin-top:16px"><h3>Rincian</h3><div class="tw"><table id="tb"></table></div><p class="note" id="ket"></p></div>{% endblock %}
+{% block js %}<script>
+let M;const $=i=>document.getElementById(i);
+async function load(){const p=new URLSearchParams();if($('fa').value)p.set('app',$('fa').value);if($('fd').value)p.set('dari',$('fd').value);if($('fs').value)p.set('sampai',$('fs').value);
+p.set('sumber',$('fsrc').value);p.set('model',$('fm').value||1);const d=await api('/api/sentimen?'+p);
+$('tb').innerHTML='<tr><th>Aplikasi</th><th>Positif</th><th>Negatif</th><th>Total</th><th>% Positif</th></tr>'+(d.distribusi.length?d.distribusi.map(r=>`<tr><td>${r.aplikasi}</td><td>${fmt(r.positif)}</td><td>${fmt(r.negatif)}</td><td>${fmt(r.positif+r.negatif)}</td><td>${r.persen_positif}%</td></tr>`).join(''):'<tr><td colspan="5" class="l">Data tidak tersedia untuk filter ini.</td></tr>');
+$('ket').textContent=$('fsrc').value=='aktual'?'Menghitung seluruh ulasan berdasarkan label hasil pelabelan hybrid.':'Menghitung data uji berdasarkan prediksi model terpilih.';
+const lab=d.distribusi.map(r=>r.aplikasi);
+const per=($('fd').value||$('fs').value)?('periode '+($('fd').value||'awal')+' s.d. '+($('fs').value||'akhir')):'seluruh periode';
+if(d.distribusi.length>1){const u=[...d.distribusi].sort((a,b)=>b.persen_positif-a.persen_positif),z=u[u.length-1];$('hl').innerHTML=`<b>Pada ${per}</b>, sentimen positif tertinggi ada pada <b style="color:${APPCOL[u[0].aplikasi]||'#1a5276'}">${u[0].aplikasi}</b> (${u[0].persen_positif}%), sedangkan terendah <b>${z.aplikasi}</b> (${z.persen_positif}%). Selisih ${(u[0].persen_positif-z.persen_positif).toFixed(1)} poin.`;$('hl').style.display='block'}else $('hl').style.display='none';
+draw('c1',{type:'bar',data:{labels:lab,datasets:[{label:'Positif',data:d.distribusi.map(r=>r.persen_positif),backgroundColor:COL.Positif},{label:'Negatif',data:d.distribusi.map(r=>100-r.persen_positif),backgroundColor:COL.Negatif}]},options:{scales:{x:{stacked:true},y:{stacked:true,max:100,ticks:{callback:v=>v+'%'}}},plugins:{tooltip:{callbacks:{label:c=>c.dataset.label+': '+c.raw.toFixed(1)+'%'}}}}});
+const bulan=[...new Set(Object.values(d.tren).flat().map(x=>x.bulan))].sort();
+draw('c2',{type:'line',data:{labels:bulan,datasets:Object.entries(d.tren).flatMap(([a,v])=>[{label:a+' - Positif',borderColor:APPCOL[a]||'#888',backgroundColor:APPCOL[a]||'#888',data:bulan.map(b=>(v.find(x=>x.bulan==b)||{}).positif??null),tension:.25},{label:a+' - Negatif',borderColor:APPCOL[a]||'#888',borderDash:[5,4],backgroundColor:APPCOL[a]||'#888',data:bulan.map(b=>(v.find(x=>x.bulan==b)||{}).negatif??null),tension:.25}])},options:{plugins:{legend:{position:'bottom'}}}})}
+(async()=>{M=await api('/api/meta');fill($('fa'),M.aplikasi,'Semua aplikasi');fill($('fm'),M.model);$('fd').min=$('fs').min=M.tanggal_min;$('fd').max=$('fs').max=M.tanggal_max;
+fill($('ft'),M.tahun.map(t=>({id:t,nama:t})),'Semua tahun');
+$('ft').onchange=()=>{const t=$('ft').value;$('fd').value=t?t+'-01-01':'';$('fs').value=t?t+'-12-31':'';load()};
+const sinkron=()=>{const d=$('fd').value,s=$('fs').value,t=$('ft');t.value=(d&&s&&d.slice(0,4)==s.slice(0,4)&&d.slice(5)=='01-01'&&s.slice(5)=='12-31'&&[...t.options].some(o=>o.value==d.slice(0,4)))?d.slice(0,4):''};
+['fd','fs'].forEach(i=>$(i).addEventListener('change',sinkron));
+['fa','fd','fs','fm'].forEach(i=>$(i).onchange=load);$('fsrc').onchange=()=>{$('lm').style.display=$('fsrc').value=='prediksi'?'flex':'none';load()};
+$('rst').onclick=()=>{$('fa').value='';$('ft').value='';$('fd').value='';$('fs').value='';$('fsrc').value='aktual';$('lm').style.display='none';load()};load()})();
+</script>{% endblock %}
