@@ -302,7 +302,7 @@ def halaman_admin():
     if berkas is not None and st.button("Unggah dan validasi"):
         def catat(status, baris, cat):
             with db.engine.begin() as c:
-                c.execute(insert(rp).values(id_user=st.session_state["uid"], aplikasi=app_pilih, berkas=berkas.name, jumlah_baris=baris, status=status, catatan=cat))
+                c.execute(insert(rp).values(waktu=datetime.datetime.now(), id_user=st.session_state["uid"], aplikasi=app_pilih, berkas=berkas.name, jumlah_baris=baris, status=status, catatan=cat))
         try: df = pd.read_csv(berkas) if berkas.name.lower().endswith(".csv") else pd.read_excel(berkas)
         except Exception: catat("Ditolak", 0, "Berkas tidak dapat dibaca"); st.error("Berkas tidak dapat dibaca.")
         else:
