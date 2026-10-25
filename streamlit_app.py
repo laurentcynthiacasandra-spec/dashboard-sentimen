@@ -23,10 +23,11 @@ UPLOAD_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "uploads")
 st.markdown("""<style>
 .block-container{padding-top:1.4rem}
 div[data-testid="stMetric"]{background:#fff;border:1px solid #e2e8f0;border-left:4px solid #e67e22;border-radius:12px;padding:12px 16px}
-.kartu{background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:14px 18px;box-shadow:0 1px 3px rgba(15,23,42,.06)}
+div[data-testid="stMetric"] *{color:#0f172a !important}
+.kartu{color:#0f172a;background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:14px 18px;box-shadow:0 1px 3px rgba(15,23,42,.06)}
 .kartu h4{margin:0 0 4px 0}.kartu .pct{font-size:2rem;font-weight:700}.kartu small{color:#64748b}
 .meter{display:flex;height:10px;border-radius:6px;overflow:hidden;margin:8px 0}.meter i{display:block}
-.hl{background:#fff4e5;border:1px solid #f5d3a6;border-radius:10px;padding:10px 14px;margin:6px 0 14px 0}
+.hl{color:#0f172a;background:#fff4e5;border:1px solid #f5d3a6;border-radius:10px;padding:10px 14px;margin:6px 0 14px 0}
 </style>""", unsafe_allow_html=True)
 
 fmt = lambda n: f"{int(n):,}".replace(",", ".")
