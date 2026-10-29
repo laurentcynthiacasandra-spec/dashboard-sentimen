@@ -65,6 +65,14 @@ riwayat_pelatihan = Table("riwayat_pelatihan", md,
     Column("aplikasi", String(50)), Column("berkas", String(255)), Column("jumlah_baris", Integer),
     Column("status", String(30)), Column("catatan", Text))
 
+# catatan tiap unggahan Admin yang diproses (dipakai untuk membatalkan unggahan secara bersih)
+unggahan = Table("unggahan", md,
+    Column("id_riwayat", Integer, ForeignKey("riwayat_pelatihan.id"), primary_key=True),
+    Column("id_aplikasi", Integer, ForeignKey("dim_aplikasi.id_aplikasi")),
+    Column("n_awal", Integer), Column("n_kosong", Integer), Column("n_dipakai", Integer),
+    Column("n_leksikon", Integer), Column("n_rating", Integer), Column("n_netral_kata", Integer), Column("n_netral_model", Integer),
+    Column("n_positif", Integer), Column("n_negatif", Integer), Column("dibatalkan", Boolean, default=False, nullable=False))
+
 def init_db(drop=False):
     if drop: md.drop_all(engine)
     md.create_all(engine)
