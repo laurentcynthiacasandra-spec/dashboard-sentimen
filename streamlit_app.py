@@ -13,6 +13,7 @@ except Exception:
 from sqlalchemy import select, func, insert, update, delete, and_
 from werkzeug.security import check_password_hash, generate_password_hash
 import db
+import pipeline
 
 da, dw, dm, fs, fe, rl, us, rp = db.dim_aplikasi, db.dim_waktu, db.dim_model, db.fact_sentimen, db.fact_evaluasi, db.ringkasan_label, db.users, db.riwayat_pelatihan
 APPCOL = {"Instagram": "#8e44ad", "TikTok": "#16a085", "X": "#34495e"}
@@ -23,10 +24,11 @@ UPLOAD_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "uploads")
 st.markdown("""<style>
 .block-container{padding-top:1.4rem}
 div[data-testid="stMetric"]{background:#fff;border:1px solid #e2e8f0;border-left:4px solid #e67e22;border-radius:12px;padding:12px 16px}
-.kartu{background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:14px 18px;box-shadow:0 1px 3px rgba(15,23,42,.06)}
+div[data-testid="stMetric"] *{color:#0f172a !important}
+.kartu{color:#0f172a;background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:14px 18px;box-shadow:0 1px 3px rgba(15,23,42,.06)}
 .kartu h4{margin:0 0 4px 0}.kartu .pct{font-size:2rem;font-weight:700}.kartu small{color:#64748b}
 .meter{display:flex;height:10px;border-radius:6px;overflow:hidden;margin:8px 0}.meter i{display:block}
-.hl{background:#fff4e5;border:1px solid #f5d3a6;border-radius:10px;padding:10px 14px;margin:6px 0 14px 0}
+.hl{color:#0f172a;background:#fff4e5;border:1px solid #f5d3a6;border-radius:10px;padding:10px 14px;margin:6px 0 14px 0}
 </style>""", unsafe_allow_html=True)
 
 fmt = lambda n: f"{int(n):,}".replace(",", ".")
@@ -292,30 +294,72 @@ def halaman_performa():
             st.markdown(f"**{ap}**")
             st.altair_chart((hm + tx).properties(height=240), width="stretch")
 
+def _catat(id_user, app, berkas, baris, status, cat):
+    with db.engine.begin() as c:
+        return c.execute(insert(rp).values(waktu=datetime.datetime.now(), id_user=id_user, aplikasi=app, berkas=berkas, jumlah_baris=baris, status=status, catatan=cat)).inserted_primary_key[0]
+
+def _ubah_riwayat(rid, **kw):
+    with db.engine.begin() as c: c.execute(update(rp).where(rp.c.id == rid).values(**kw))
+
+def _proses_unggahan(berkas, app_pilih):
+    uid = st.session_state["uid"]
+    try: df = pd.read_csv(berkas) if berkas.name.lower().endswith(".csv") else pd.read_excel(berkas)
+    except Exception:
+        _catat(uid, app_pilih, berkas.name, 0, "Ditolak", "Berkas tidak dapat dibaca"); st.error("Berkas tidak dapat dibaca."); return
+    try: d, tak_valid = pipeline.baca_dan_periksa(df)
+    except pipeline.GagalProses as e:
+        _catat(uid, app_pilih, berkas.name, len(df), "Ditolak", str(e)); st.error(str(e)); return
+    id_app = next(i for i, n in meta()["apps"] if n == app_pilih)
+    terakhir = pipeline.tanggal_terakhir(db.engine, id_app)
+    n_total = len(d)
+    if terakhir is not None: d = d[d["tgl"] > terakhir].reset_index(drop=True)
+    n_lama = n_total - len(d)
+    if d.empty:
+        _catat(uid, app_pilih, berkas.name, 0, "Tanpa data baru", f"{n_lama} ulasan bertanggal sampai {terakhir} sudah ada; tidak ada ulasan yang lebih baru")
+        st.info(f"Tidak ada ulasan yang lebih baru dari {terakhir}. {n_lama} ulasan dilewati karena periodenya sudah tercakup."); return
+    if len(d) > pipeline.BATAS_BARIS:
+        _catat(uid, app_pilih, berkas.name, len(d), "Ditolak", f"{len(d)} ulasan baru melebihi batas {pipeline.BATAS_BARIS}; pecah berkas")
+        st.error(f"Ada {len(d)} ulasan baru, melebihi batas {pipeline.BATAS_BARIS} per unggahan. Pecah berkas menjadi beberapa bagian."); return
+    rid = _catat(uid, app_pilih, berkas.name, len(d), "Memproses", "Sedang diproses")
+    bar = st.progress(0.0, text="Menyiapkan kamus dan model...")
+    try:
+        hasil, n_kosong, sumber = pipeline.proses(d, pipeline.KUNCI_APP[app_pilih], lambda p, t: bar.progress(min(p, 1.0), text=t))
+        u = pipeline.simpan(db.engine, hasil, len(d), n_kosong, app_pilih, rid)
+    except pipeline.GagalProses as e:
+        _ubah_riwayat(rid, status="Gagal", catatan=str(e)); bar.empty(); st.error(str(e)); return
+    except Exception as e:
+        _ubah_riwayat(rid, status="Gagal", catatan=f"Kesalahan sistem: {type(e).__name__}"); bar.empty(); st.error(f"Pemrosesan gagal ({type(e).__name__}). Tidak ada data yang tersimpan."); return
+    cat = f"{u['n_dipakai']} ulasan dimuat ({u['n_positif']} positif, {u['n_negatif']} negatif)"
+    if n_lama: cat += f"; {n_lama} dilewati (tanggal <= {terakhir})"
+    if tak_valid: cat += f"; {tak_valid} baris tidak valid"
+    if n_kosong: cat += f"; {n_kosong} kosong setelah preprocessing"
+    if not sumber["ada_kamus"]: cat += "; normalisasi kata tidak baku dilewati (kamus tidak terunduh)"
+    _ubah_riwayat(rid, status="Diproses", jumlah_baris=u["n_dipakai"], catatan=cat)
+    st.cache_data.clear(); bar.progress(1.0, text="Selesai"); st.success(cat + ". Halaman Ringkasan dan Perbandingan Sentimen sudah diperbarui.")
+
 def halaman_admin():
     st.header("Halaman Admin")
     st.subheader("Unggah Data Ulasan Baru")
+    st.caption(f"Unggah ulasan mentah hasil scraping (kolom wajib: content, score, at). Sistem memproses otomatis: preprocessing, pelabelan hybrid, "
+               f"dan prediksi dua model. Hanya ulasan yang tanggalnya **setelah data terakhir** aplikasi tersebut yang dimuat, maksimal {pipeline.BATAS_BARIS} ulasan per unggahan.")
     col = st.columns([1, 2])
     m = meta(); app_pilih = col[0].selectbox("Aplikasi target", [n for _, n in m["apps"]], key="up_app")
-    berkas = col[1].file_uploader("Berkas ulasan (.csv atau .xlsx; kolom wajib: content, score, at)", type=["csv", "xlsx"])
-    if berkas is not None and st.button("Unggah dan validasi"):
-        def catat(status, baris, cat):
-            with db.engine.begin() as c:
-                c.execute(insert(rp).values(id_user=st.session_state["uid"], aplikasi=app_pilih, berkas=berkas.name, jumlah_baris=baris, status=status, catatan=cat))
-        try: df = pd.read_csv(berkas) if berkas.name.lower().endswith(".csv") else pd.read_excel(berkas)
-        except Exception: catat("Ditolak", 0, "Berkas tidak dapat dibaca"); st.error("Berkas tidak dapat dibaca.")
-        else:
-            kurang = {"content", "score", "at"} - set(df.columns)
-            if kurang: catat("Ditolak", len(df), "Kolom kurang: " + ", ".join(sorted(kurang))); st.error("Kolom wajib tidak ditemukan: " + ", ".join(sorted(kurang)))
-            else:
-                try: os.makedirs(UPLOAD_DIR, exist_ok=True); df.to_csv(os.path.join(UPLOAD_DIR, f"{app_pilih}_{datetime.datetime.now():%Y%m%d_%H%M%S}.csv"), index=False)
-                except Exception: pass
-                catat("Diterima", len(df), "Menunggu pemrosesan pipeline"); st.success(f"{len(df)} baris diterima. Langkah pelatihan ulang dijalankan melalui pipeline.")
+    berkas = col[1].file_uploader("Berkas ulasan (.csv atau .xlsx)", type=["csv", "xlsx"])
+    if berkas is not None and st.button("Unggah dan proses"):
+        _proses_unggahan(berkas, app_pilih)
     st.subheader("Riwayat Unggahan")
     with db.engine.connect() as c:
         rs = c.execute(select(rp, us.c.username).join(us, us.c.id_user == rp.c.id_user, isouter=True).order_by(rp.c.id.desc()).limit(20)).all()
-    st.dataframe(pd.DataFrame([dict(Waktu=r.waktu.strftime("%d %b %Y %H:%M"), Pengguna=r.username, Aplikasi=r.aplikasi, Berkas=r.berkas, Baris=r.jumlah_baris, Status=r.status, Catatan=r.catatan) for r in rs]),
+    st.dataframe(pd.DataFrame([dict(ID=r.id, Waktu=r.waktu.strftime("%d %b %Y %H:%M"), Pengguna=r.username, Aplikasi=r.aplikasi, Berkas=r.berkas, Baris=r.jumlah_baris, Status=r.status, Catatan=r.catatan) for r in rs]),
                  hide_index=True, width="stretch")
+    aktif = [r for r in rs if r.status == "Diproses"]
+    if aktif:
+        with st.expander("Batalkan unggahan (menghapus datanya dari dashboard)"):
+            pil = {f"#{r.id} - {r.aplikasi} - {r.berkas} ({r.jumlah_baris} ulasan)": r.id for r in aktif}
+            sel = st.selectbox("Unggahan", list(pil), key="bt_pil")
+            if st.button("Batalkan unggahan ini"):
+                try: pipeline.batalkan(db.engine, pil[sel]); st.cache_data.clear(); st.success("Unggahan dibatalkan, data dihapus dari dashboard."); st.rerun()
+                except pipeline.GagalProses as e: st.error(str(e))
     st.subheader("Kelola Pengguna")
     with db.engine.connect() as c:
         akun = c.execute(select(us).order_by(us.c.id_user)).all()
