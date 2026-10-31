@@ -15,7 +15,7 @@ from sqlalchemy import select, insert, update, delete, func
 import db
 
 BASE = os.path.dirname(os.path.abspath(__file__))
-MODEL_DIR = os.path.join(BASE, "model")
+MODEL_DIR = os.path.join(BASE, "model") if os.path.isdir(os.path.join(BASE, "model")) else BASE   # model/ bila ada, jika tidak berkas model di folder utama
 KAMUS_URL = "https://raw.githubusercontent.com/nasalsabila/kamus-alay/master/colloquial-indonesian-lexicon.csv"
 NEGASI = {"tidak", "tak", "bukan", "belum", "jangan", "tanpa", "kurang", "enggak", "nggak",
           "gak", "ga", "tdk", "blm", "engga", "ngga"}
@@ -45,6 +45,10 @@ def sumber():
         raise GagalProses("Berkas kamus InSet (inset_positive.tsv, inset_negative.tsv) belum ada di repositori.")
     pos = pd.read_csv(fp, sep="\t"); neg = pd.read_csv(fn, sep="\t")
     pos_d, neg_d = dict(zip(pos["word"], pos["weight"])), dict(zip(neg["word"], neg["weight"]))
+    fk = os.path.join(BASE, "kamus_valensi.csv")           # skor 1.142 kata InSet yang bentrok (positif dan negatif), hasil valence tuning
+    if not os.path.exists(fk):
+        raise GagalProses("Berkas kamus_valensi.csv belum ada di repositori.")
+    kv = pd.read_csv(fk); fix = {k: int(v) for k, v in zip(kv["kata"], kv["skor_baru"])}
     kamus, ada_kamus = {}, True
     path = os.path.join(BASE, "kamus_alay.csv")
     try:
@@ -55,7 +59,7 @@ def sumber():
             kamus.setdefault(s, f)
     except Exception:
         ada_kamus = False                 # tanpa internet: normalisasi dilewati (hasil sedikit berbeda)
-    return dict(stemmer=stemmer, sw=sw, pos=pos_d, neg=neg_d, kamus=kamus, ada_kamus=ada_kamus)
+    return dict(stemmer=stemmer, sw=sw, pos=pos_d, neg=neg_d, fix=fix, kamus=kamus, ada_kamus=ada_kamus)
 
 
 @lru_cache(maxsize=4)
@@ -82,9 +86,12 @@ def preprocess(text, s):
 def hitung_skor(text, s):
     skor = n_pos = n_neg = 0
     for w in str(text).split():
-        if w in s["pos"]: skor += s["pos"][w]; n_pos += 1
-        if w in s["neg"]: skor += s["neg"][w]; n_neg += 1
-    return skor, n_pos, n_neg
+        if w in s["fix"]:                                  # kata bentrok InSet: skor hasil valence tuning
+            v = s["fix"][w]; skor += v; n_pos += v > 0; n_neg += v < 0
+        else:
+            if w in s["pos"]: skor += s["pos"][w]; n_pos += 1
+            if w in s["neg"]: skor += s["neg"][w]; n_neg += 1
+    return skor, int(n_pos), int(n_neg)
 
 
 def label_rating(r): return "Positif" if r >= 4 else "Negatif" if r <= 2 else "Netral"
