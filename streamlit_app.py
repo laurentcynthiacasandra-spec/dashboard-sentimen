@@ -18,23 +18,115 @@ st.set_page_config(
 )
 
 HD = "#175A85"
+HD2 = "#1B4F8A"
 POS = "#3F8A1E"
 NEG = "#D94545"
-BG = "#EFEAE8"
+MUTED = "#6B7A8F"
+BG = "#F4F0EE"
+CARD_BG = "#FFFFFF"
 
 st.markdown(
     f"""
     <style>
-    .main .block-container {{max-width: 1100px; padding-top: 1rem; padding-bottom: 2rem;}}
-    .stTabs [data-baseweb="tab-list"] {{gap: 4px;}}
-    .stTabs [data-baseweb="tab"] {{background: {BG}; border-radius: 8px 8px 0 0;}}
-    .stTabs [aria-selected="true"] {{background: {HD}; color: white;}}
-    .metric-card {{background: white; padding: 1rem; border-radius: 8px; border: 1px solid #ddd;}}
-    .metric-label {{color: #666; font-size: 0.85rem; text-transform: uppercase;}}
-    .metric-value {{font-size: 2rem; font-weight: bold; color: {HD};}}
-    .metric-sub {{color: #666; font-size: 0.9rem;}}
-    header {{visibility: hidden;}}
-    footer {{visibility: hidden;}}
+    .stApp {{background: linear-gradient(180deg, #F8F5F3 0%, #EFEAE8 100%);}}
+    .main .block-container {{max-width: 1180px; padding-top: 1.2rem; padding-bottom: 3rem;}}
+
+    /* Hide default Streamlit chrome */
+    header, footer {{visibility: hidden;}}
+    #MainMenu {{visibility: hidden;}}
+
+    /* Banner header */
+    .app-banner {{
+        background: linear-gradient(135deg, {HD} 0%, {HD2} 100%);
+        color: white;
+        padding: 1.4rem 1.6rem;
+        border-radius: 14px;
+        margin-bottom: 1.6rem;
+        box-shadow: 0 4px 16px rgba(23,90,133,0.18);
+    }}
+    .app-banner h1 {{font-size: 1.5rem; margin: 0; font-weight: 700;}}
+    .app-banner .subtitle {{font-size: 0.95rem; opacity: 0.9; margin-top: 0.2rem;}}
+
+    /* Tab styling */
+    .stTabs [data-baseweb="tab-list"] {{
+        gap: 8px; background: transparent; border-bottom: none;
+        padding: 0 0 4px 0;
+    }}
+    .stTabs [data-baseweb="tab"] {{
+        background: {CARD_BG}; border-radius: 10px;
+        padding: 0.6rem 1.2rem; font-weight: 500;
+        border: 1px solid #DDD7D3; color: {HD};
+    }}
+    .stTabs [aria-selected="true"] {{
+        background: {HD}; color: white; border-color: {HD};
+        box-shadow: 0 2px 8px rgba(23,90,133,0.3);
+    }}
+
+    /* Metric cards */
+    .metric-card {{
+        background: {CARD_BG}; padding: 1.2rem 1.3rem; border-radius: 12px;
+        border: 1px solid #E5DED9;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+        height: 100%;
+    }}
+    .metric-label {{
+        color: {MUTED}; font-size: 0.78rem; text-transform: uppercase;
+        letter-spacing: 0.5px; font-weight: 600; margin-bottom: 0.4rem;
+    }}
+    .metric-value {{font-size: 2rem; font-weight: 700; line-height: 1.1; color: {HD};}}
+    .metric-sub {{color: {MUTED}; font-size: 0.85rem; margin-top: 0.3rem;}}
+
+    /* Section cards */
+    .section-card {{
+        background: {CARD_BG}; padding: 1.4rem; border-radius: 12px;
+        border: 1px solid #E5DED9;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+        margin-bottom: 1.2rem;
+    }}
+    .section-title {{
+        color: {HD}; font-size: 1.1rem; font-weight: 700;
+        margin-bottom: 0.8rem; padding-bottom: 0.4rem;
+        border-bottom: 2px solid {HD};
+    }}
+
+    /* Insight bullets */
+    .insight-row {{
+        display: flex; align-items: flex-start; gap: 0.6rem;
+        padding: 0.4rem 0; color: #333;
+    }}
+    .insight-dot {{
+        width: 8px; height: 8px; border-radius: 50%;
+        background: {HD}; margin-top: 0.5rem; flex-shrink: 0;
+    }}
+
+    /* Login card */
+    .login-card {{
+        background: {CARD_BG}; padding: 2rem 2.2rem; border-radius: 16px;
+        border: 1px solid #E5DED9;
+        box-shadow: 0 6px 24px rgba(0,0,0,0.08);
+        max-width: 420px; margin: 3rem auto;
+    }}
+    .login-title {{color: {HD}; text-align: center; font-size: 1.8rem; font-weight: 700;}}
+    .login-subtitle {{color: {MUTED}; text-align: center; font-size: 0.95rem; margin-bottom: 1.4rem;}}
+
+    /* Buttons */
+    .stButton > button {{border-radius: 8px; font-weight: 600;}}
+    .stButton > button[kind="primary"] {{
+        background: {HD}; border-color: {HD};
+    }}
+    .stButton > button[kind="primary"]:hover {{
+        background: {HD2}; border-color: {HD2};
+    }}
+
+    /* Streamlit tables */
+    .stTable {{border-radius: 8px; overflow: hidden;}}
+    .stTable thead tr th {{background: {HD}; color: white;}}
+
+    /* Sidebar */
+    [data-testid="stSidebar"] {{background: {CARD_BG};}}
+
+    /* Date input */
+    .stDateInput > div > div {{background: white; border-radius: 8px;}}
     </style>
     """,
     unsafe_allow_html=True,
@@ -126,7 +218,7 @@ def daftar(username: str, password: str, konfirmasi: str) -> tuple[bool, str]:
 # ---------------------------------------------------------------------------
 @st.cache_data(ttl=300, show_spinner=False)
 def model_utama_id() -> int:
-    """Ambil id_model bukan pembanding (SVM/NB utama)."""
+    """Ambil id_model utama. Pembanding diabaikan supaya tidak dobel hitung."""
     df = kueri(
         "SELECT id_model FROM dim_model WHERE COALESCE(pembanding, FALSE) = FALSE ORDER BY id_model LIMIT 1"
     )
@@ -137,14 +229,15 @@ def model_utama_id() -> int:
 
 
 @st.cache_data(ttl=300, show_spinner=False)
-def daftar_aplikasi() -> list[str]:
+def daftar_aplikasi() -> list:
     df = kueri("SELECT nama_aplikasi FROM dim_aplikasi ORDER BY nama_aplikasi")
     return df["nama_aplikasi"].tolist()
 
 
 @st.cache_data(ttl=300, show_spinner=False)
 def ringkasan_global() -> dict:
-    """Total ulasan, rata-rata positif, dan jumlah aplikasi."""
+    """Total ulasan, rata-rata positif, dan jumlah aplikasi (tanpa dobel)."""
+    idm = model_utama_id()
     df = kueri(
         """
         SELECT a.nama_aplikasi AS aplikasi,
@@ -153,35 +246,30 @@ def ringkasan_global() -> dict:
         FROM fact_sentimen f
         JOIN dim_aplikasi a ON a.id_aplikasi = f.id_aplikasi
         JOIN dim_sentimen s ON s.id_sentimen = f.id_sentimen
+        WHERE f.id_model = %s
         GROUP BY a.nama_aplikasi, s.label_sentimen
         ORDER BY a.nama_aplikasi, s.label_sentimen
-        """
+        """,
+        (idm,),
     )
-    # Normalkan label jadi Title Case supaya konsisten
     df["label"] = df["label"].str.strip().str.title()
     total_rincian = (
         df.groupby("aplikasi")["jumlah"].sum().reset_index().rename(columns={"jumlah": "total_app"})
     )
     df = df.merge(total_rincian, on="aplikasi")
-    total = int(df["jumlah"].sum()) // 2 if False else int(total_rincian["total_app"].sum())
+    total = int(total_rincian["total_app"].sum())
     positif = int(df[df["label"] == "Positif"]["jumlah"].sum())
     pos_pct = (positif / total * 100) if total else 0.0
     aplikasi = sorted(df["aplikasi"].unique())
     return {
-        "total": total,
-        "positif_pct": pos_pct,
-        "jumlah_aplikasi": len(aplikasi),
-        "aplikasi": aplikasi,
+        "total": total, "positif_pct": pos_pct,
+        "jumlah_aplikasi": len(aplikasi), "aplikasi": aplikasi,
         "rincian": df,
     }
 
 
 @st.cache_data(ttl=300, show_spinner=False)
 def metrik_model() -> pd.DataFrame:
-    """Hitung metrik evaluasi per (aplikasi, model) dari data uji.
-
-    Pakai id_sentimen (aktual) vs id_sentimen_prediksi, difilter data_uji = TRUE.
-    """
     df = kueri(
         """
         SELECT a.nama_aplikasi AS aplikasi,
@@ -207,7 +295,6 @@ def metrik_model() -> pd.DataFrame:
 
 
 def hitung_metrik(cm: dict) -> dict:
-    """Hitung accuracy, precision, recall, F1 untuk kelas positif & negatif."""
     tp = cm.get(("Positif", "Positif"), 0)
     fn = cm.get(("Positif", "Negatif"), 0)
     fp = cm.get(("Negatif", "Positif"), 0)
@@ -225,8 +312,7 @@ def hitung_metrik(cm: dict) -> dict:
     p_neg, r_neg, f1_neg = _prf(tn, fn, fp)
     macro_f1 = (f1_pos + f1_neg) / 2
     return {
-        "tp": tp, "fp": fp, "fn": fn, "tn": tn,
-        "accuracy": acc,
+        "tp": tp, "fp": fp, "fn": fn, "tn": tn, "accuracy": acc,
         "precision_pos": p_pos, "recall_pos": r_pos, "f1_pos": f1_pos,
         "precision_neg": p_neg, "recall_neg": r_neg, "f1_neg": f1_neg,
         "macro_f1": macro_f1,
@@ -248,13 +334,16 @@ def performa_semua() -> pd.DataFrame:
 
 @st.cache_data(ttl=300, show_spinner=False)
 def rentang_tanggal(aplikasi: str) -> tuple:
+    idm = model_utama_id()
     if aplikasi == "Semua":
         df = kueri(
             """
             SELECT MIN(w.tanggal) AS mn, MAX(w.tanggal) AS mx
             FROM fact_sentimen f
             JOIN dim_waktu w ON w.id_waktu = f.id_waktu
-            """
+            WHERE f.id_model = %s
+            """,
+            (idm,),
         )
     else:
         df = kueri(
@@ -263,15 +352,16 @@ def rentang_tanggal(aplikasi: str) -> tuple:
             FROM fact_sentimen f
             JOIN dim_waktu w ON w.id_waktu = f.id_waktu
             JOIN dim_aplikasi a ON a.id_aplikasi = f.id_aplikasi
-            WHERE a.nama_aplikasi = %s
+            WHERE f.id_model = %s AND a.nama_aplikasi = %s
             """,
-            (aplikasi,),
+            (idm, aplikasi),
         )
     return df.iloc[0]["mn"], df.iloc[0]["mx"]
 
 
 @st.cache_data(ttl=300, show_spinner=False)
 def sentimen_tersaring(aplikasi: str, dari, sampai) -> pd.DataFrame:
+    idm = model_utama_id()
     kondisi_app = "" if aplikasi == "Semua" else "AND a.nama_aplikasi = %s"
     param_app = () if aplikasi == "Semua" else (aplikasi,)
     if dari and sampai:
@@ -283,11 +373,11 @@ def sentimen_tersaring(aplikasi: str, dari, sampai) -> pd.DataFrame:
             JOIN dim_aplikasi a ON a.id_aplikasi = f.id_aplikasi
             JOIN dim_sentimen s ON s.id_sentimen = f.id_sentimen
             JOIN dim_waktu w ON w.id_waktu = f.id_waktu
-            WHERE w.tanggal BETWEEN %s AND %s {kondisi_app}
+            WHERE f.id_model = %s AND w.tanggal BETWEEN %s AND %s {kondisi_app}
             GROUP BY a.nama_aplikasi, s.label_sentimen
             ORDER BY a.nama_aplikasi, s.label_sentimen
         """
-        df = kueri(sql, (dari, sampai) + param_app)
+        df = kueri(sql, (idm, dari, sampai) + param_app)
     else:
         sql = f"""
             SELECT a.nama_aplikasi AS aplikasi,
@@ -296,11 +386,11 @@ def sentimen_tersaring(aplikasi: str, dari, sampai) -> pd.DataFrame:
             FROM fact_sentimen f
             JOIN dim_aplikasi a ON a.id_aplikasi = f.id_aplikasi
             JOIN dim_sentimen s ON s.id_sentimen = f.id_sentimen
-            WHERE 1 = 1 {kondisi_app}
+            WHERE f.id_model = %s {kondisi_app}
             GROUP BY a.nama_aplikasi, s.label_sentimen
             ORDER BY a.nama_aplikasi, s.label_sentimen
         """
-        df = kueri(sql, param_app)
+        df = kueri(sql, (idm,) + param_app)
     if not df.empty:
         df["label"] = df["label"].str.strip().str.title()
     return df
@@ -332,7 +422,19 @@ def kartu_metrik(label: str, nilai: str, sub: str = "", warna: str = HD) -> None
         <div class="metric-card">
             <div class="metric-label">{label}</div>
             <div class="metric-value" style="color:{warna};">{nilai}</div>
-            {f'<div class="metric-sub">{sub}</div>' if sub else ''}
+            {f'<div class="metric-sub">{sub}</div>' if sub else '<div class="metric-sub">&nbsp;</div>'}
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def banner(judul: str, subjudul: str = "") -> None:
+    st.markdown(
+        f"""
+        <div class="app-banner">
+            <h1>{judul}</h1>
+            {f'<div class="subtitle">{subjudul}</div>' if subjudul else ''}
         </div>
         """,
         unsafe_allow_html=True,
@@ -348,14 +450,17 @@ def grafik_distribusi(data: dict) -> None:
             go.Pie(
                 labels=["Positif", "Negatif"],
                 values=[pos_total, neg_total],
-                hole=0.5,
-                marker=dict(colors=[POS, NEG]),
+                hole=0.6,
+                marker=dict(colors=[POS, NEG], line=dict(color="white", width=3)),
                 textinfo="label+percent",
-                textfont=dict(size=14),
+                textfont=dict(size=14, color="white", family="Inter, Arial"),
             )
         ]
     )
-    fig.update_layout(margin=dict(l=0, r=0, t=10, b=10), height=320, showlegend=False)
+    fig.update_layout(
+        margin=dict(l=0, r=0, t=10, b=10), height=320, showlegend=False,
+        paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+    )
     st.plotly_chart(fig, use_container_width=True)
 
 
@@ -363,8 +468,9 @@ def grafik_distribusi(data: dict) -> None:
 # Halaman: Ringkasan
 # ---------------------------------------------------------------------------
 def halaman_ringkasan() -> None:
-    st.header("Ringkasan Insight Utama")
+    banner("Ringkasan Insight Utama", "Ulasan Instagram, TikTok, dan X dari Google Play Store")
     data = ringkasan_global()
+
     k1, k2, k3 = st.columns(3)
     with k1:
         kartu_metrik(
@@ -379,43 +485,59 @@ def halaman_ringkasan() -> None:
             warna=POS,
         )
     with k3:
-        kartu_metrik("Model Terbaik", "SVM (kernel linear)")
+        kartu_metrik("Model Terbaik", "SVM", "kernel linear")
 
-    st.markdown("### Distribusi Sentimen")
-    grafik_distribusi(data)
+    st.markdown("<br>", unsafe_allow_html=True)
+    col_a, col_b = st.columns([1.1, 1])
+    with col_a:
+        st.markdown('<div class="section-card">', unsafe_allow_html=True)
+        st.markdown('<div class="section-title">Distribusi Sentimen</div>', unsafe_allow_html=True)
+        grafik_distribusi(data)
+        st.markdown('</div>', unsafe_allow_html=True)
+    with col_b:
+        st.markdown('<div class="section-card">', unsafe_allow_html=True)
+        st.markdown('<div class="section-title">Insight Utama</div>', unsafe_allow_html=True)
 
-    st.markdown("### Insight Utama")
-    rincian = data["rincian"]
-    pos_app = rincian[rincian["label"] == "Positif"].copy()
-    pos_app["pct"] = pos_app["jumlah"] / pos_app["total_app"] * 100
-    if not pos_app.empty:
-        terbaik = pos_app.sort_values("pct", ascending=False).iloc[0]
-        st.markdown(
-            f"- **{terbaik['aplikasi']}** memiliki sentimen positif tertinggi "
-            f"({terbaik['pct']:.1f}%).".replace(".", ",")
-        )
-    st.markdown(
-        "- Pada ketiga aplikasi, model SVM memberikan macro-F1 yang lebih tinggi dibanding Naive Bayes."
-    )
-    try:
-        tgl_terakhir = kueri(
-            "SELECT MAX(w.tanggal) AS mx FROM fact_sentimen f JOIN dim_waktu w ON w.id_waktu = f.id_waktu"
-        ).iloc[0]["mx"]
-        if pd.notna(tgl_terakhir):
+        rincian = data["rincian"]
+        pos_app = rincian[rincian["label"] == "Positif"].copy()
+        if not pos_app.empty:
+            pos_app["pct"] = pos_app["jumlah"] / pos_app["total_app"] * 100
+            terbaik = pos_app.sort_values("pct", ascending=False).iloc[0]
+            pct_str = f"{terbaik['pct']:.1f}%".replace(".", ",")
             st.markdown(
-                f"- Data terbaru: **{tgl_terakhir.strftime('%d %B %Y')}**."
+                f'<div class="insight-row"><div class="insight-dot"></div>'
+                f'<div><b>{terbaik["aplikasi"]}</b> memiliki sentimen positif tertinggi ({pct_str}).</div></div>',
+                unsafe_allow_html=True,
             )
-    except Exception:
-        pass
+        st.markdown(
+            f'<div class="insight-row"><div class="insight-dot"></div>'
+            f'<div>Model <b>SVM</b> memberikan macro-F1 lebih tinggi dibanding Naive Bayes pada ketiga aplikasi.</div></div>',
+            unsafe_allow_html=True,
+        )
+        try:
+            tgl = kueri(
+                "SELECT MAX(w.tanggal) AS mx FROM fact_sentimen f JOIN dim_waktu w ON w.id_waktu = f.id_waktu"
+            ).iloc[0]["mx"]
+            if pd.notna(tgl):
+                st.markdown(
+                    f'<div class="insight-row"><div class="insight-dot"></div>'
+                    f'<div>Data terbaru: <b>{tgl.strftime("%d %B %Y")}</b>.</div></div>',
+                    unsafe_allow_html=True,
+                )
+        except Exception:
+            pass
+        st.markdown('</div>', unsafe_allow_html=True)
 
 
 # ---------------------------------------------------------------------------
 # Halaman: Perbandingan Sentimen
 # ---------------------------------------------------------------------------
 def halaman_sentimen() -> None:
-    st.header("Perbandingan Sentimen")
+    banner("Perbandingan Sentimen", "Pilih aplikasi dan selang waktu untuk menyaring data")
     data = ringkasan_global()
-    col1, col2, col3 = st.columns([2, 1, 1])
+
+    st.markdown('<div class="section-card">', unsafe_allow_html=True)
+    col1, col2, col3, col4 = st.columns([2, 1.2, 1.2, 0.6])
     with col1:
         aplikasi = st.selectbox(
             "Aplikasi", ["Semua"] + data["aplikasi"], index=0, key="filter_sentimen_app"
@@ -431,10 +553,20 @@ def halaman_sentimen() -> None:
             "Sampai", value=None, min_value=mn, max_value=mx,
             key="filter_sentimen_sampai", format="DD/MM/YYYY",
         )
+    with col4:
+        st.write("")
+        st.write("")
+        if st.button("Reset", use_container_width=True):
+            for k in ["filter_sentimen_dari", "filter_sentimen_sampai"]:
+                if k in st.session_state:
+                    del st.session_state[k]
+            st.rerun()
     if mn and mx:
         st.caption(
             f"Data tersedia pada rentang **{mn.strftime('%d %b %Y')} – {mx.strftime('%d %b %Y')}**."
         )
+    st.markdown('</div>', unsafe_allow_html=True)
+
     if dari and sampai and dari > sampai:
         st.error("Tanggal 'Dari' tidak boleh lebih besar dari 'Sampai'.")
         return
@@ -452,7 +584,8 @@ def halaman_sentimen() -> None:
     pivot["Positif %"] = (pivot["Positif"] / pivot["Total"] * 100).round(1)
     pivot["Negatif %"] = (pivot["Negatif"] / pivot["Total"] * 100).round(1)
 
-    st.subheader("Persentase Sentimen per Aplikasi")
+    st.markdown('<div class="section-card">', unsafe_allow_html=True)
+    st.markdown('<div class="section-title">Persentase Sentimen per Aplikasi</div>', unsafe_allow_html=True)
     melt = pivot.reset_index().melt(
         id_vars="aplikasi", value_vars=["Positif %", "Negatif %"],
         var_name="Sentimen", value_name="Persentase",
@@ -462,56 +595,71 @@ def halaman_sentimen() -> None:
         melt, x="Persentase", y="aplikasi", color="Sentimen", orientation="h",
         color_discrete_map={"Positif": POS, "Negatif": NEG}, text="Persentase",
     )
-    fig.update_traces(texttemplate="%{text:.1f}%", textposition="inside")
+    fig.update_traces(texttemplate="%{text:.1f}%", textposition="inside", textfont=dict(color="white", size=13))
     fig.update_layout(
-        xaxis=dict(range=[0, 100], title=""), yaxis=dict(title=""),
-        barmode="stack", height=260, margin=dict(l=10, r=10, t=30, b=10), legend_title="",
+        xaxis=dict(range=[0, 100], title="", showgrid=False, showticklabels=False),
+        yaxis=dict(title="", tickfont=dict(size=13)),
+        barmode="stack", height=max(220, 70 * len(pivot) + 80),
+        margin=dict(l=10, r=10, t=10, b=20),
+        legend=dict(orientation="h", yanchor="bottom", y=-0.25, xanchor="center", x=0.5, title=""),
+        paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
     )
     st.plotly_chart(fig, use_container_width=True)
+    st.markdown('</div>', unsafe_allow_html=True)
 
-    st.subheader("Tabel Perbandingan")
+    st.markdown('<div class="section-card">', unsafe_allow_html=True)
+    st.markdown('<div class="section-title">Tabel Perbandingan</div>', unsafe_allow_html=True)
     tampil = pivot.reset_index()[["aplikasi", "Positif", "Negatif", "Total"]].copy()
     tampil.columns = ["Aplikasi", "Positif", "Negatif", "Total"]
     for c in ["Positif", "Negatif", "Total"]:
         tampil[c] = tampil[c].astype(int).map(lambda v: f"{v:,}".replace(",", "."))
     st.table(tampil)
+    st.markdown('</div>', unsafe_allow_html=True)
 
 
 # ---------------------------------------------------------------------------
-# Halaman: Performa Algoritma
+# Halaman: Performa
 # ---------------------------------------------------------------------------
 def halaman_performa() -> None:
-    st.header("Perbandingan Performa Algoritma")
+    banner("Perbandingan Performa Algoritma", "Naive Bayes vs Support Vector Machine")
     data = ringkasan_global()
+    st.markdown('<div class="section-card">', unsafe_allow_html=True)
     aplikasi = st.selectbox("Aplikasi", data["aplikasi"], key="filter_performa_app")
+    st.markdown('</div>', unsafe_allow_html=True)
+
     perf = performa_semua()
     if perf.empty:
-        st.info(
-            "Metrik performa belum tersedia. Pastikan fact_sentimen memiliki data_uji dan id_sentimen_prediksi."
-        )
+        st.info("Metrik performa belum tersedia pada fact_sentimen (data_uji).")
         return
     sub = perf[perf["aplikasi"] == aplikasi].sort_values("model")
     if sub.empty:
         st.warning(f"Tidak ada data performa untuk aplikasi {aplikasi}.")
         return
 
-    st.subheader("Macro-F1 (data uji)")
+    st.markdown('<div class="section-card">', unsafe_allow_html=True)
+    st.markdown('<div class="section-title">Macro-F1 (data uji)</div>', unsafe_allow_html=True)
     fig = px.bar(
         sub, x="macro_f1", y="model", orientation="h", color="model",
-        color_discrete_map={"Naive Bayes": "#2A79D6", "SVM": "#1B4F8A",
-                            "Complement Naive Bayes": "#2A79D6"},
+        color_discrete_map={
+            "Naive Bayes": "#2A79D6", "SVM": HD2,
+            "Complement Naive Bayes": "#2A79D6",
+        },
         text="macro_f1",
     )
-    fig.update_traces(texttemplate="%{text:.4f}", textposition="outside")
+    fig.update_traces(texttemplate="%{text:.4f}", textposition="outside", textfont=dict(size=13))
     fig.update_layout(
-        xaxis=dict(range=[0, 1], title=""), yaxis=dict(title=""),
-        showlegend=False, height=220, margin=dict(l=10, r=10, t=30, b=10),
+        xaxis=dict(range=[0, 1.05], title="", showgrid=False, showticklabels=False),
+        yaxis=dict(title="", tickfont=dict(size=13)),
+        showlegend=False, height=200, margin=dict(l=10, r=10, t=10, b=10),
+        paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
     )
     st.plotly_chart(fig, use_container_width=True)
     terbaik = sub.sort_values("macro_f1", ascending=False).iloc[0]["model"]
-    st.success(f"Model terbaik untuk {aplikasi}: **{terbaik}**")
+    st.success(f"Model terbaik untuk **{aplikasi}**: **{terbaik}**")
+    st.markdown('</div>', unsafe_allow_html=True)
 
-    st.subheader("Metrik Evaluasi")
+    st.markdown('<div class="section-card">', unsafe_allow_html=True)
+    st.markdown('<div class="section-title">Metrik Evaluasi</div>', unsafe_allow_html=True)
     kolom = [
         ("accuracy", "Accuracy"),
         ("precision_pos", "Precision (+)"),
@@ -529,8 +677,10 @@ def halaman_performa() -> None:
             for k, _ in kolom
         ]
     st.table(tabel)
+    st.markdown('</div>', unsafe_allow_html=True)
 
-    st.subheader(f"Confusion Matrix ({terbaik})")
+    st.markdown('<div class="section-card">', unsafe_allow_html=True)
+    st.markdown(f'<div class="section-title">Confusion Matrix ({terbaik})</div>', unsafe_allow_html=True)
     bar_terbaik = sub[sub["model"] == terbaik].iloc[0]
     cm_df = pd.DataFrame(
         [
@@ -540,19 +690,21 @@ def halaman_performa() -> None:
         columns=["", "Prediksi Positif", "Prediksi Negatif"],
     )
     st.table(cm_df)
+    st.markdown('</div>', unsafe_allow_html=True)
 
 
 # ---------------------------------------------------------------------------
-# Halaman: Admin — Unggah dan Riwayat
+# Halaman: Admin
 # ---------------------------------------------------------------------------
 def halaman_admin(user: dict) -> None:
-    st.header("Halaman Admin")
+    banner("Halaman Admin", "Unggah data ulasan baru dan kelola riwayat unggahan")
     data = ringkasan_global()
 
-    st.subheader("Unggah Data Ulasan Baru")
+    st.markdown('<div class="section-card">', unsafe_allow_html=True)
+    st.markdown('<div class="section-title">Unggah Data Ulasan Baru</div>', unsafe_allow_html=True)
     aplikasi = st.selectbox("Aplikasi", data["aplikasi"], key="admin_app")
     berkas = st.file_uploader(
-        "Berkas ulasan (.csv atau .xlsx, kolom: content, score, at)",
+        "Berkas ulasan (.csv atau .xlsx dengan kolom: content, score, at)",
         type=["csv", "xlsx"],
     )
     if st.button("Unggah dan Proses", type="primary", use_container_width=True):
@@ -563,37 +715,38 @@ def halaman_admin(user: dict) -> None:
             ringkasan_global.clear()
             riwayat_unggahan.clear()
             st.rerun()
+    st.markdown('</div>', unsafe_allow_html=True)
 
-    st.divider()
-    st.subheader("Riwayat Unggahan")
+    st.markdown('<div class="section-card">', unsafe_allow_html=True)
+    st.markdown('<div class="section-title">Riwayat Unggahan</div>', unsafe_allow_html=True)
     riwayat = riwayat_unggahan()
     if riwayat.empty:
         st.info("Belum ada unggahan.")
-        return
-    for _, baris in riwayat.iterrows():
-        kolom = st.columns([2, 2, 2, 3, 2, 1])
-        kolom[0].write(
-            baris["waktu"].strftime("%d %b %Y %H:%M") if pd.notna(baris["waktu"]) else "-"
-        )
-        kolom[1].write(baris["aplikasi"])
-        kolom[2].write(baris["username"])
-        kolom[3].write(baris["berkas"] or "-")
-        kolom[4].write(
-            f"{int(baris['jumlah_baris']):,} ulasan".replace(",", ".")
-            if pd.notna(baris["jumlah_baris"]) else "-"
-        )
-        if baris["status"] not in ("Dibatalkan",):
-            if kolom[5].button("Batal", key=f"batal_{baris['id']}"):
-                batalkan_unggahan(int(baris["id"]))
-                ringkasan_global.clear()
-                riwayat_unggahan.clear()
-                st.rerun()
-        else:
-            kolom[5].caption(baris["status"])
+    else:
+        for _, baris in riwayat.iterrows():
+            kolom = st.columns([2, 2, 2, 3, 2, 1])
+            kolom[0].write(
+                baris["waktu"].strftime("%d %b %Y %H:%M") if pd.notna(baris["waktu"]) else "-"
+            )
+            kolom[1].write(baris["aplikasi"])
+            kolom[2].write(baris["username"])
+            kolom[3].write(baris["berkas"] or "-")
+            kolom[4].write(
+                f"{int(baris['jumlah_baris']):,} ulasan".replace(",", ".")
+                if pd.notna(baris["jumlah_baris"]) else "-"
+            )
+            if baris["status"] not in ("Dibatalkan",):
+                if kolom[5].button("Batal", key=f"batal_{baris['id']}"):
+                    batalkan_unggahan(int(baris["id"]))
+                    ringkasan_global.clear()
+                    riwayat_unggahan.clear()
+                    st.rerun()
+            else:
+                kolom[5].caption(baris["status"])
+    st.markdown('</div>', unsafe_allow_html=True)
 
 
 def proses_unggahan(user: dict, aplikasi: str, berkas) -> None:
-    """Validasi berkas Admin dan simpan sebagai pending di riwayat_pelatihan."""
     try:
         if berkas.name.lower().endswith(".csv"):
             df = pd.read_csv(berkas)
@@ -618,10 +771,7 @@ def proses_unggahan(user: dict, aplikasi: str, berkas) -> None:
             VALUES (NOW(), %s, %s, %s, %s, 'Pending', %s)
             """,
             (
-                user["id_user"],
-                aplikasi,
-                berkas.name,
-                len(df),
+                user["id_user"], aplikasi, berkas.name, len(df),
                 "Menunggu pemrosesan oleh skrip pipeline peneliti",
             ),
         )
@@ -648,12 +798,10 @@ def batalkan_unggahan(id_unggahan: int) -> None:
 # Halaman: Login dan Daftar
 # ---------------------------------------------------------------------------
 def halaman_login() -> None:
+    st.markdown('<div class="login-card">', unsafe_allow_html=True)
     st.markdown(
-        f"<h1 style='color:{HD};text-align:center;margin-top:2rem;'>Analisis Sentimen</h1>",
-        unsafe_allow_html=True,
-    )
-    st.markdown(
-        "<p style='text-align:center;color:#666;'>Instagram · TikTok · X</p>",
+        f'<div class="login-title">Analisis Sentimen</div>'
+        f'<div class="login-subtitle">Instagram · TikTok · X</div>',
         unsafe_allow_html=True,
     )
     tab_masuk, tab_daftar = st.tabs(["Masuk", "Daftar"])
@@ -672,7 +820,6 @@ def halaman_login() -> None:
                 else:
                     st.session_state["user"] = user
                     st.rerun()
-
     with tab_daftar:
         with st.form("form_daftar", clear_on_submit=True):
             u = st.text_input("Username baru", key="daftar_u")
@@ -686,6 +833,7 @@ def halaman_login() -> None:
             else:
                 st.error(pesan)
         st.caption("Akun baru otomatis berperan Pengguna.")
+    st.markdown('</div>', unsafe_allow_html=True)
 
 
 # ---------------------------------------------------------------------------
