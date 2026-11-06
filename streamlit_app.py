@@ -947,8 +947,8 @@ def halaman_sentimen() -> None:
                 ),
                 yaxis=dict(title="", tickfont=dict(size=11, family="Inter", color="#475569"), showgrid=True, gridcolor="#F1F5F9",
                            tickformat=",d", separatethousands=True),
-                height=400, margin=dict(l=10, r=10, t=10, b=100),
-                legend=dict(orientation="h", yanchor="bottom", y=-0.32, xanchor="center", x=0.5, font=dict(size=11, family="Inter")),
+                height=460, margin=dict(l=10, r=10, t=10, b=150),
+                legend=dict(orientation="h", yanchor="bottom", y=-0.48, xanchor="center", x=0.5, font=dict(size=11, family="Inter")),
                 paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
                 hovermode="x unified",
             )
@@ -969,54 +969,86 @@ def halaman_sentimen() -> None:
 # ---------------------------------------------------------------------------
 # Halaman: Performa Algoritma
 # ---------------------------------------------------------------------------
-def halaman_performa() -> None:
-    page_title("Perbandingan Performa Algoritma", "Evaluasi Naive Bayes dan SVM pada data uji")
-    perf = performa_semua()
-    if perf.empty:
-        st.info("Metrik performa belum tersedia pada fact_sentimen (data_uji).")
-        return
-
-    opsi_app = ["Semua aplikasi"] + sorted(perf["aplikasi"].unique())
-    opsi_model = ["Semua algoritma"] + sorted(perf["model"].unique())
-
-    mulai_kartu("Filter")
-    c1, c2 = st.columns(2)
-    with c1: f_app = st.selectbox("Aplikasi", opsi_app, key="fp_app")
-    with c2: f_model = st.selectbox("Algoritma", opsi_model, key="fp_model")
-    tutup_kartu()
-
-    sub = perf.copy()
-    if f_app != "Semua aplikasi":
-        sub = sub[sub["aplikasi"] == f_app]
-    if f_model != "Semua algoritma":
-        sub = sub[sub["model"] == f_model]
-    if sub.empty:
-        st.warning("Tidak ada data performa untuk filter ini.")
-        return
-
-    terbaik_per_app = (
-        perf.sort_values("macro_f1", ascending=False)
-        .groupby("aplikasi").head(1).set_index("aplikasi")["model"].to_dict()
-    )
-
-    mulai_kartu("Tabel Perbandingan Metrik Evaluasi (data uji)")
-    header_html = (
-        '<tr style="background:#F1F5F9; color:#0A3B5E;">'
-        '<th style="padding:0.7rem 0.9rem; text-align:left; font-size:0.78rem; text-transform:uppercase; letter-spacing:0.3px;">Aplikasi</th>'
-        '<th style="padding:0.7rem 0.9rem; text-align:left; font-size:0.78rem; text-transform:uppercase; letter-spacing:0.3px;">Algoritma</th>'
-        '<th style="padding:0.7rem 0.9rem; text-align:right; font-size:0.78rem; text-transform:uppercase; letter-spacing:0.3px;">Accuracy</th>'
-        '<th style="padding:0.7rem 0.9rem; text-align:right; font-size:0.78rem; text-transform:uppercase; letter-spacing:0.3px;">Precision</th>'
-        '<th style="padding:0.7rem 0.9rem; text-align:right; font-size:0.78rem; text-transform:uppercase; letter-spacing:0.3px;">Recall</th>'
-        '<th style="padding:0.7rem 0.9rem; text-align:right; font-size:0.78rem; text-transform:uppercase; letter-spacing:0.3px;">F1</th>'
-        '<th style="padding:0.7rem 0.9rem; text-align:right; font-size:0.78rem; text-transform:uppercase; letter-spacing:0.3px;">Macro-F1</th>'
-        '<th style="padding:0.7rem 0.9rem; text-align:right; font-size:0.78rem; text-transform:uppercase; letter-spacing:0.3px;">Waktu latih (detik)</th>'
+def render_cm_mini(tp, fn, fp, tn, judul, acc):
+    total = tp + fn + fp + tn
+    pct_tp = (tp / total * 100) if total else 0.0
+    pct_fn = (fn / total * 100) if total else 0.0
+    pct_fp = (fp / total * 100) if total else 0.0
+    pct_tn = (tn / total * 100) if total else 0.0
+    acc_s = f"{acc:.2f}%".replace(".", ",")
+    tp_s = f"{tp:,}".replace(",", ".")
+    fn_s = f"{fn:,}".replace(",", ".")
+    fp_s = f"{fp:,}".replace(",", ".")
+    tn_s = f"{tn:,}".replace(",", ".")
+    total_s = f"{total:,}".replace(",", ".")
+    pct_tp_s = f"{pct_tp:.1f}%".replace(".", ",")
+    pct_fn_s = f"{pct_fn:.1f}%".replace(".", ",")
+    pct_fp_s = f"{pct_fp:.1f}%".replace(".", ",")
+    pct_tn_s = f"{pct_tn:.1f}%".replace(".", ",")
+    cell_benar = "background:linear-gradient(135deg,#10B981,#059669); color:white;"
+    cell_salah = "background:linear-gradient(135deg,#1E5A8A,#0A3B5E); color:white;"
+    html = (
+        f'<div style="background:white; border:1px solid #E2E8F0; border-radius:10px; padding:0.9rem 1rem; margin-bottom:0.7rem;">'
+        f'<div style="color:#0A3B5E; font-weight:700; font-size:0.9rem;">{judul}</div>'
+        f'<div style="color:#64748B; font-size:0.74rem; margin-bottom:0.6rem;">Akurasi {acc_s} · total {total_s}</div>'
+        '<table style="width:100%; border-collapse:separate; border-spacing:3px; font-family:Inter;">'
+        '<tr>'
+        '<td style="width:60px;"></td>'
+        '<td colspan="2" style="text-align:center; font-size:0.65rem; color:#64748B; text-transform:uppercase; letter-spacing:0.4px; padding-bottom:0.2rem; font-weight:600;">Prediksi</td>'
         '</tr>'
+        '<tr>'
+        '<td></td>'
+        '<td style="text-align:center; font-size:0.72rem; color:#0A3B5E; font-weight:600; padding:0.15rem;">Positif</td>'
+        '<td style="text-align:center; font-size:0.72rem; color:#0A3B5E; font-weight:600; padding:0.15rem;">Negatif</td>'
+        '</tr>'
+        '<tr>'
+        '<td style="text-align:right; font-size:0.7rem; color:#0A3B5E; font-weight:600; padding-right:0.4rem;">Aktual<br>Positif</td>'
+        f'<td style="{cell_benar} text-align:center; padding:0.55rem 0.3rem; border-radius:6px;">'
+        f'<div style="font-size:1rem; font-weight:700; line-height:1;">{tp_s}</div>'
+        f'<div style="font-size:0.62rem; opacity:0.9; margin-top:0.15rem;">TP · {pct_tp_s}</div></td>'
+        f'<td style="{cell_salah} text-align:center; padding:0.55rem 0.3rem; border-radius:6px;">'
+        f'<div style="font-size:1rem; font-weight:700; line-height:1;">{fn_s}</div>'
+        f'<div style="font-size:0.62rem; opacity:0.9; margin-top:0.15rem;">FN · {pct_fn_s}</div></td>'
+        '</tr>'
+        '<tr>'
+        '<td style="text-align:right; font-size:0.7rem; color:#0A3B5E; font-weight:600; padding-right:0.4rem;">Aktual<br>Negatif</td>'
+        f'<td style="{cell_salah} text-align:center; padding:0.55rem 0.3rem; border-radius:6px;">'
+        f'<div style="font-size:1rem; font-weight:700; line-height:1;">{fp_s}</div>'
+        f'<div style="font-size:0.62rem; opacity:0.9; margin-top:0.15rem;">FP · {pct_fp_s}</div></td>'
+        f'<td style="{cell_benar} text-align:center; padding:0.55rem 0.3rem; border-radius:6px;">'
+        f'<div style="font-size:1rem; font-weight:700; line-height:1;">{tn_s}</div>'
+        f'<div style="font-size:0.62rem; opacity:0.9; margin-top:0.15rem;">TN · {pct_tn_s}</div></td>'
+        '</tr>'
+        '</table></div>'
     )
-    baris_html = []
+    return html
+
+
+def _th_cell(label):
+    return f'<th style="padding:0.6rem 0.8rem; text-align:right; font-size:0.72rem; text-transform:uppercase; letter-spacing:0.3px; color:#0A3B5E;">{label}</th>'
+
+
+def tampilkan_performa_app(app: str, perf: pd.DataFrame, df_metrik: pd.DataFrame) -> None:
+    sub = perf[perf["aplikasi"] == app].copy()
+    if sub.empty:
+        st.info(f"Tidak ada data performa untuk {app}.")
+        return
+    model_terbaik = sub.sort_values("macro_f1", ascending=False).iloc[0]["model"]
+
+    # Tabel metrik
+    mulai_kartu(f"Metrik Evaluasi — {app}")
+    header = (
+        '<tr style="background:#F1F5F9;">'
+        '<th style="padding:0.6rem 0.8rem; text-align:left; font-size:0.72rem; text-transform:uppercase; letter-spacing:0.3px; color:#0A3B5E;">Algoritma</th>'
+        + _th_cell("Accuracy") + _th_cell("Precision") + _th_cell("Recall")
+        + _th_cell("F1") + _th_cell("Macro-F1") + _th_cell("Waktu (dtk)")
+        + '</tr>'
+    )
+    baris = []
     for _, r in sub.iterrows():
-        terbaik = terbaik_per_app.get(r["aplikasi"]) == r["model"]
+        terbaik = r["model"] == model_terbaik
         bg = "#ECFDF5" if terbaik else "transparent"
-        warna_teks = "#064E3B" if terbaik else "#334155"
+        warna = "#064E3B" if terbaik else "#334155"
         tebal = "font-weight:600;" if terbaik else ""
         bintang = ' <span style="color:#F59E0B; font-size:1rem;">★</span>' if terbaik else ""
         acc_s = ("%.4f" % r["accuracy"]).replace(".", ",")
@@ -1025,148 +1057,95 @@ def halaman_performa() -> None:
         f1_s = ("%.4f" % r["f1_pos"]).replace(".", ",")
         mf1_s = ("%.4f" % r["macro_f1"]).replace(".", ",")
         wl_s = str(r["waktu_latih"]).replace(".", ",") if pd.notna(r["waktu_latih"]) else "-"
-        baris_html.append(
-            '<tr style="background:' + bg + '; color:' + warna_teks + '; ' + tebal + '">'
-            '<td style="padding:0.65rem 0.9rem; border-top:1px solid #E2E8F0;">' + str(r["aplikasi"]) + '</td>'
-            '<td style="padding:0.65rem 0.9rem; border-top:1px solid #E2E8F0;">' + str(r["model"]) + bintang + '</td>'
-            '<td style="padding:0.65rem 0.9rem; border-top:1px solid #E2E8F0; text-align:right;">' + acc_s + '</td>'
-            '<td style="padding:0.65rem 0.9rem; border-top:1px solid #E2E8F0; text-align:right;">' + prec_s + '</td>'
-            '<td style="padding:0.65rem 0.9rem; border-top:1px solid #E2E8F0; text-align:right;">' + rec_s + '</td>'
-            '<td style="padding:0.65rem 0.9rem; border-top:1px solid #E2E8F0; text-align:right;">' + f1_s + '</td>'
-            '<td style="padding:0.65rem 0.9rem; border-top:1px solid #E2E8F0; text-align:right;">' + mf1_s + '</td>'
-            '<td style="padding:0.65rem 0.9rem; border-top:1px solid #E2E8F0; text-align:right;">' + wl_s + '</td>'
+        baris.append(
+            f'<tr style="background:{bg}; color:{warna}; {tebal}">'
+            f'<td style="padding:0.6rem 0.8rem; border-top:1px solid #E2E8F0;">{r["model"]}{bintang}</td>'
+            f'<td style="padding:0.6rem 0.8rem; border-top:1px solid #E2E8F0; text-align:right;">{acc_s}</td>'
+            f'<td style="padding:0.6rem 0.8rem; border-top:1px solid #E2E8F0; text-align:right;">{prec_s}</td>'
+            f'<td style="padding:0.6rem 0.8rem; border-top:1px solid #E2E8F0; text-align:right;">{rec_s}</td>'
+            f'<td style="padding:0.6rem 0.8rem; border-top:1px solid #E2E8F0; text-align:right;">{f1_s}</td>'
+            f'<td style="padding:0.6rem 0.8rem; border-top:1px solid #E2E8F0; text-align:right;">{mf1_s}</td>'
+            f'<td style="padding:0.6rem 0.8rem; border-top:1px solid #E2E8F0; text-align:right;">{wl_s}</td>'
             '</tr>'
         )
     st.markdown(
-        '<table style="width:100%; border-collapse:collapse; font-size:0.88rem; font-family:Inter;">'
-        + '<thead>' + header_html + '</thead>'
-        + '<tbody>' + "".join(baris_html) + '</tbody>'
-        + '</table>',
+        '<table style="width:100%; border-collapse:collapse; font-size:0.85rem; font-family:Inter;">'
+        f'<thead>{header}</thead><tbody>{"".join(baris)}</tbody></table>',
         unsafe_allow_html=True,
     )
-    st.caption("Model terbaik ditandai ★ berdasarkan macro-F1; selisih kurang dari 0,01 dianggap setara. Precision, recall, dan F1 dihitung untuk kelas positif.")
     tutup_kartu()
 
-    # Confusion Matrix
-    mulai_kartu("Confusion Matrix per Aplikasi dan Algoritma")
-    st.caption("Membandingkan prediksi model dengan label aktual pada data uji. Diagonal (hijau tua) menunjukkan prediksi benar; sel luar diagonal (merah muda) menunjukkan kesalahan klasifikasi.")
+    # Confusion matrix 2 model side by side (ukuran kecil)
+    mulai_kartu(f"Confusion Matrix — {app}")
+    sub_met = df_metrik[df_metrik["aplikasi"] == app]
+    model_list = sorted(sub_met["model"].unique())
+    cols = st.columns([1, 1, 0.3])
+    for idx, model_nama in enumerate(model_list[:2]):
+        sub_mm = sub_met[sub_met["model"] == model_nama]
+        cm = {(a, p): int(n) for a, p, n in zip(sub_mm["aktual"], sub_mm["prediksi"], sub_mm["n"])}
+        tp = cm.get(("Positif", "Positif"), 0); fn = cm.get(("Positif", "Negatif"), 0)
+        fp = cm.get(("Negatif", "Positif"), 0); tn = cm.get(("Negatif", "Negatif"), 0)
+        total = tp + fn + fp + tn
+        acc = ((tp + tn) / total * 100) if total else 0.0
+        with cols[idx]:
+            st.markdown(render_cm_mini(tp, fn, fp, tn, model_nama, acc), unsafe_allow_html=True)
+    st.caption("Sel hijau: prediksi benar (TP/TN). Sel biru: prediksi salah (FN/FP).")
+    tutup_kartu()
+
+    # Grafik macro-F1 khusus aplikasi ini
+    mulai_kartu(f"Perbandingan Macro-F1 — {app}")
+    fig = go.Figure()
+    for _, r in sub.iterrows():
+        warna_bar = HD_DARK if "svm" in r["model"].lower() else "#93C5FD"
+        label = f"{r['macro_f1']:.4f}".replace(".", ",")
+        fig.add_trace(go.Bar(
+            x=[r["model"]], y=[r["macro_f1"]],
+            marker_color=warna_bar, text=label, textposition="outside",
+            textfont=dict(size=12, family="Inter", color="#0A3B5E"),
+            showlegend=False,
+        ))
+    fig.update_layout(
+        xaxis=dict(title="", tickfont=dict(size=12, family="Inter")),
+        yaxis=dict(range=[0, 1.1], title="Macro-F1", tickfont=dict(size=11, family="Inter"),
+                   showgrid=True, gridcolor="#F1F5F9"),
+        height=280, margin=dict(l=10, r=10, t=10, b=10),
+        paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+    )
+    st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+    tutup_kartu()
+
+    # Rekomendasi
+    tb = sub.sort_values("macro_f1", ascending=False).iloc[0]
+    f1 = f"{tb['macro_f1']:.4f}".replace(".", ",")
+    kedua = sub.sort_values("macro_f1", ascending=False).iloc[1] if len(sub) > 1 else None
+    f1k = f"{kedua['macro_f1']:.4f}".replace(".", ",") if kedua is not None else ""
+    selisih_v = (tb['macro_f1'] - kedua['macro_f1']) if kedua is not None else 0
+    selisih_s = f"{selisih_v:.4f}".replace(".", ",") if kedua is not None else ""
+    warna = warna_aplikasi(app)
+    tambahan = (f" (selisih {selisih_s} vs {kedua['model']} {f1k})" if kedua is not None else "")
+    st.markdown(
+        f'<div style="padding:1rem 1.2rem; margin-top:0.5rem; border-left:4px solid {warna}; background:#F8FAFC; border-radius:8px;">'
+        f'<div style="color:#64748B; font-size:0.78rem; text-transform:uppercase; letter-spacing:0.5px; font-weight:600;">Rekomendasi Algoritma</div>'
+        f'<div style="color:{HD_DARK}; font-weight:700; font-size:1.15rem; margin:0.3rem 0;">{tb["model"]} · macro-F1 {f1}</div>'
+        f'<div style="color:#64748B; font-size:0.85rem;">Model terbaik untuk {app}{tambahan}.</div>'
+        f'</div>',
+        unsafe_allow_html=True,
+    )
+
+
+def halaman_performa() -> None:
+    page_title("Perbandingan Performa Algoritma", "Evaluasi Naive Bayes dan SVM per aplikasi")
+    perf = performa_semua()
     df_metrik = metrik_model()
-    if df_metrik.empty:
-        st.info("Belum ada data uji untuk membuat confusion matrix.")
-    else:
-        aplikasi_list = sorted(df_metrik["aplikasi"].unique())
-        if f_app != "Semua aplikasi": aplikasi_list = [a for a in aplikasi_list if a == f_app]
-        for app in aplikasi_list:
-            st.markdown(
-                f'<div style="color:{warna_aplikasi(app)}; font-weight:700; font-size:1.05rem; margin:1rem 0 0.5rem 0;">{app}</div>',
-                unsafe_allow_html=True,
-            )
-            sub_metrik = df_metrik[df_metrik["aplikasi"] == app]
-            model_list = sorted(sub_metrik["model"].unique())
-            if f_model != "Semua algoritma": model_list = [m for m in model_list if m == f_model]
-            if not model_list: continue
-            kolom_cm = st.columns(len(model_list))
-            for idx, model_nama in enumerate(model_list):
-                sub_mm = sub_metrik[sub_metrik["model"] == model_nama]
-                cm = {(a, p): int(n) for a, p, n in zip(sub_mm["aktual"], sub_mm["prediksi"], sub_mm["n"])}
-                tp = cm.get(("Positif", "Positif"), 0)
-                fn = cm.get(("Positif", "Negatif"), 0)
-                fp = cm.get(("Negatif", "Positif"), 0)
-                tn = cm.get(("Negatif", "Negatif"), 0)
-                total = tp + fn + fp + tn
-                acc = ((tp + tn) / total * 100) if total else 0.0
-                pct_tp = (tp / total * 100) if total else 0.0
-                pct_fn = (fn / total * 100) if total else 0.0
-                pct_fp = (fp / total * 100) if total else 0.0
-                pct_tn = (tn / total * 100) if total else 0.0
-                acc_s = f"{acc:.2f}%".replace(".", ",")
-                with kolom_cm[idx]:
-                    st.markdown(
-                        f'<div style="background:#F8FAFC; border:1px solid #E2E8F0; border-radius:12px; padding:1rem;">'
-                        f'<div style="color:{HD_DARK}; font-weight:700; font-size:0.95rem; margin-bottom:0.3rem;">{model_nama}</div>'
-                        f'<div style="color:#64748B; font-size:0.78rem; margin-bottom:0.8rem;">Akurasi {acc_s} · total {total:,}</div>'.replace(",", "."),
-                        unsafe_allow_html=True,
-                    )
-                    tabel_html = (
-                        '<table style="width:100%; border-collapse:separate; border-spacing:4px; font-family:Inter;">'
-                        '<tr>'
-                        '<td style="padding:0.4rem;"></td>'
-                        '<td colspan="2" style="text-align:center; font-size:0.72rem; color:#64748B; text-transform:uppercase; letter-spacing:0.4px; padding-bottom:0.3rem;"><b>Prediksi</b></td>'
-                        '</tr>'
-                        '<tr>'
-                        '<td style="padding:0.4rem;"></td>'
-                        '<td style="text-align:center; font-size:0.78rem; color:#0A3B5E; font-weight:600; padding:0.3rem;">Positif</td>'
-                        '<td style="text-align:center; font-size:0.78rem; color:#0A3B5E; font-weight:600; padding:0.3rem;">Negatif</td>'
-                        '</tr>'
-                        '<tr>'
-                        '<td style="text-align:center; font-size:0.78rem; color:#0A3B5E; font-weight:600; padding:0.3rem; writing-mode:vertical-rl; transform:rotate(180deg);">Aktual Positif</td>'
-                        f'<td style="background:linear-gradient(135deg,#10B981,#059669); color:white; text-align:center; padding:1.2rem 0.5rem; border-radius:8px; font-weight:700;">'
-                        f'<div style="font-size:1.4rem; line-height:1;">{tp:,}</div>'.replace(",", ".")
-                        + f'<div style="font-size:0.72rem; opacity:0.9; margin-top:0.2rem;">TP · {pct_tp:.1f}%</div>'.replace(".", ",")
-                        + '</td>'
-                        f'<td style="background:#FEE2E2; color:#991B1B; text-align:center; padding:1.2rem 0.5rem; border-radius:8px; font-weight:700;">'
-                        f'<div style="font-size:1.4rem; line-height:1;">{fn:,}</div>'.replace(",", ".")
-                        + f'<div style="font-size:0.72rem; opacity:0.9; margin-top:0.2rem;">FN · {pct_fn:.1f}%</div>'.replace(".", ",")
-                        + '</td>'
-                        '</tr>'
-                        '<tr>'
-                        '<td style="text-align:center; font-size:0.78rem; color:#0A3B5E; font-weight:600; padding:0.3rem;">Aktual Negatif</td>'
-                        f'<td style="background:#FEE2E2; color:#991B1B; text-align:center; padding:1.2rem 0.5rem; border-radius:8px; font-weight:700;">'
-                        f'<div style="font-size:1.4rem; line-height:1;">{fp:,}</div>'.replace(",", ".")
-                        + f'<div style="font-size:0.72rem; opacity:0.9; margin-top:0.2rem;">FP · {pct_fp:.1f}%</div>'.replace(".", ",")
-                        + '</td>'
-                        f'<td style="background:linear-gradient(135deg,#10B981,#059669); color:white; text-align:center; padding:1.2rem 0.5rem; border-radius:8px; font-weight:700;">'
-                        f'<div style="font-size:1.4rem; line-height:1;">{tn:,}</div>'.replace(",", ".")
-                        + f'<div style="font-size:0.72rem; opacity:0.9; margin-top:0.2rem;">TN · {pct_tn:.1f}%</div>'.replace(".", ",")
-                        + '</td>'
-                        '</tr>'
-                        '</table>'
-                    )
-                    st.markdown(tabel_html + '</div>', unsafe_allow_html=True)
-    tutup_kartu()
+    if perf.empty or df_metrik.empty:
+        st.info("Metrik performa belum tersedia pada fact_sentimen (data_uji).")
+        return
 
-    col_grafik, col_rek = st.columns([1.3, 1])
-    with col_grafik:
-        mulai_kartu("Grafik Macro-F1 per Aplikasi")
-        fig = px.bar(
-            perf, x="aplikasi", y="macro_f1", color="model",
-            color_discrete_map={"Naive Bayes": "#93C5FD", "SVM": HD_DARK,
-                                "Complement Naive Bayes": "#93C5FD",
-                                "Naive Bayes (Complement)": "#93C5FD",
-                                "SVM (kernel linear)": HD_DARK},
-            barmode="group",
-            text=perf["macro_f1"].apply(lambda v: f"{v:.4f}".replace(".", ",")),
-        )
-        fig.update_traces(textposition="outside", textfont=dict(size=10, family="Inter"))
-        fig.update_layout(
-            xaxis=dict(title="", tickfont=dict(size=12, family="Inter")),
-            yaxis=dict(range=[0, 1.1], title="Macro-F1", tickfont=dict(size=11, family="Inter")),
-            height=340, margin=dict(l=10, r=10, t=10, b=10),
-            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1, title=""),
-            paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-        )
-        st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
-        tutup_kartu()
-
-    with col_rek:
-        mulai_kartu("Rekomendasi Algoritma")
-        for app in sorted(perf["aplikasi"].unique()):
-            sub_app = perf[perf["aplikasi"] == app].sort_values("macro_f1", ascending=False)
-            if sub_app.empty: continue
-            tb = sub_app.iloc[0]
-            f1 = f"{tb['macro_f1']:.4f}".replace(".", ",")
-            kedua = sub_app.iloc[1] if len(sub_app) > 1 else None
-            f1k = f"{kedua['macro_f1']:.4f}".replace(".", ",") if kedua is not None else ""
-            selisih = f"{(tb['macro_f1'] - kedua['macro_f1']):.4f}".replace(".", ",") if kedua is not None else ""
-            warna = warna_aplikasi(app)
-            st.markdown(
-                f'<div style="padding:0.9rem 1rem; margin-bottom:0.6rem; border-left:4px solid {warna}; background:#F8FAFC; border-radius:6px;">'
-                f'<div style="color:{HD_DARK}; font-weight:700; margin-bottom:0.2rem;">{app}: {tb["model"]}</div>'
-                f'<div style="color:#64748B; font-size:0.85rem;">macro-F1 {f1}{f" vs {f1k}" if kedua is not None else ""}{f", selisih {selisih}" if kedua is not None else ""}</div>'
-                f'</div>',
-                unsafe_allow_html=True,
-            )
-        tutup_kartu()
+    aplikasi_list = sorted(perf["aplikasi"].unique())
+    tabs = st.tabs(aplikasi_list)
+    for tab, app in zip(tabs, aplikasi_list):
+        with tab:
+            tampilkan_performa_app(app, perf, df_metrik)
 
 
 # ---------------------------------------------------------------------------
