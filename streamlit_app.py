@@ -1,3 +1,7 @@
+"""Dashboard Analisis Sentimen Instagram, TikTok, dan X.
+
+Tampilan menyerupai aplikasi mobile APK, responsif untuk desktop dan mobile.
+"""
 import os
 
 import bcrypt
@@ -178,6 +182,32 @@ st.markdown(
         border-radius: 8px; font-size: 0.85rem;
         margin-bottom: 0.8rem;
     }}
+    
+
+    /* Nav pill (radio horizontal styled as pills) */
+    .stRadio > div[role="radiogroup"] {
+        gap: 6px; flex-wrap: wrap; justify-content: center;
+        background: transparent; margin-bottom: 0.8rem;
+    }
+    .stRadio > div[role="radiogroup"] > label {
+        background: #FFFFFF !important; border: 1px solid #E5DED9 !important;
+        padding: 0.45rem 1.1rem !important; border-radius: 22px !important;
+        margin: 0 !important; cursor: pointer; font-weight: 500;
+        color: #6B7A8F !important; transition: all 0.15s ease;
+    }
+    .stRadio > div[role="radiogroup"] > label:hover {
+        background: #F8F5F3 !important; border-color: #175A85 !important;
+    }
+    .stRadio > div[role="radiogroup"] > label:has(input:checked) {
+        background: #175A85 !important; color: white !important; border-color: #175A85 !important;
+    }
+    .stRadio > div[role="radiogroup"] > label > div:first-child {display: none !important;}
+    .stRadio > div[role="radiogroup"] > label > div:last-child p {color: inherit !important;}
+
+    /* Donat chart (Distribusi Sentimen) container */
+    .kartu [data-testid="stPlotlyChart"] {
+        max-width: 100%; overflow: hidden;
+    }
     </style>
     """,
     unsafe_allow_html=True,
@@ -544,9 +574,9 @@ def halaman_ringkasan() -> None:
         hovertemplate="%{label}<br>%{value:,} ulasan<extra></extra>",
     )])
     fig.update_layout(
-        margin=dict(l=0, r=0, t=0, b=0), height=240,
+        margin=dict(l=20, r=20, t=10, b=10), height=260,
         showlegend=True,
-        legend=dict(orientation="v", yanchor="middle", y=0.5, xanchor="left", x=1.0, font=dict(size=12)),
+        legend=dict(orientation="h", yanchor="top", y=-0.05, xanchor="center", x=0.5, font=dict(size=12)),
         paper_bgcolor="rgba(0,0,0,0)",
     )
     st.plotly_chart(fig, use_container_width=True)
@@ -877,6 +907,16 @@ def halaman_login() -> None:
 # ---------------------------------------------------------------------------
 def aplikasi_utama() -> None:
     user = st.session_state["user"]
+    halaman_opt = ["Ringkasan", "Sentimen", "Performa"]
+    if user["role"] == "Admin":
+        halaman_opt.append("Admin")
+    halaman_tajuk = {
+        "Ringkasan": "Ringkasan Insight",
+        "Sentimen": "Perbandingan Sentimen",
+        "Performa": "Performa Algoritma",
+        "Admin": "Admin: Unggah Data",
+    }
+
     with st.sidebar:
         st.markdown(f"**{user['username']}**  \nPeran: `{user['role']}`")
         if st.button("Keluar", use_container_width=True):
@@ -886,32 +926,33 @@ def aplikasi_utama() -> None:
         st.caption("Dashboard Analisis Sentimen")
         st.caption("Universitas Tarumanagara")
 
-    # Pilih halaman via tabs
-    if user["role"] == "Admin":
-        tab_ring, tab_sent, tab_perf, tab_adm = st.tabs(["Ringkasan", "Sentimen", "Performa", "Admin"])
-        with tab_ring:
-            page_header("Ringkasan Insight", user["username"])
-            halaman_ringkasan()
-        with tab_sent:
-            page_header("Perbandingan Sentimen", user["username"])
-            halaman_sentimen()
-        with tab_perf:
-            page_header("Performa Algoritma", user["username"])
-            halaman_performa()
-        with tab_adm:
-            page_header("Admin: Unggah Data", user["username"])
-            halaman_admin(user)
-    else:
-        tab_ring, tab_sent, tab_perf = st.tabs(["Ringkasan", "Sentimen", "Performa"])
-        with tab_ring:
-            page_header("Ringkasan Insight", user["username"])
-            halaman_ringkasan()
-        with tab_sent:
-            page_header("Perbandingan Sentimen", user["username"])
-            halaman_sentimen()
-        with tab_perf:
-            page_header("Performa Algoritma", user["username"])
-            halaman_performa()
+    # Header biru selalu di atas dengan judul halaman aktif
+    aktif = st.session_state.get("halaman_aktif", "Ringkasan")
+    if aktif not in halaman_opt:
+        aktif = "Ringkasan"
+    page_header(halaman_tajuk[aktif], user["username"])
+
+    # Nav pill (radio di-styling khusus)
+    pilihan = st.radio(
+        "Menu", halaman_opt,
+        index=halaman_opt.index(aktif),
+        horizontal=True, key="nav_radio",
+        label_visibility="collapsed",
+    )
+    if pilihan != aktif:
+        st.session_state["halaman_aktif"] = pilihan
+        st.rerun()
+
+    st.markdown("<div style='height:0.4rem'></div>", unsafe_allow_html=True)
+
+    if pilihan == "Ringkasan":
+        halaman_ringkasan()
+    elif pilihan == "Sentimen":
+        halaman_sentimen()
+    elif pilihan == "Performa":
+        halaman_performa()
+    elif pilihan == "Admin":
+        halaman_admin(user)
 
 
 def main() -> None:
