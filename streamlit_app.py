@@ -577,8 +577,8 @@ def rentang_tanggal(aplikasi: str) -> tuple:
 
 
 @st.cache_data(ttl=300, show_spinner=False)
-def sentimen_mingguan(aplikasi: str, dari, sampai, tahun) -> pd.DataFrame:
-    """Jumlah ulasan per minggu per aplikasi per sentimen."""
+def sentimen_bulanan(aplikasi: str, dari, sampai, tahun) -> pd.DataFrame:
+    """Jumlah ulasan per bulan per aplikasi per sentimen."""
     idm = model_utama_id()
     cond = []
     parm = [idm]
@@ -591,7 +591,7 @@ def sentimen_mingguan(aplikasi: str, dari, sampai, tahun) -> pd.DataFrame:
     wh = (" AND " + " AND ".join(cond)) if cond else ""
     sql = f"""
         SELECT a.nama_aplikasi AS aplikasi,
-               DATE_TRUNC('week', w.tanggal)::date AS minggu,
+               DATE_TRUNC('month', w.tanggal)::date AS bulan,
                s.label_sentimen AS label,
                COUNT(*) AS jumlah
         FROM fact_sentimen f
@@ -599,8 +599,8 @@ def sentimen_mingguan(aplikasi: str, dari, sampai, tahun) -> pd.DataFrame:
         JOIN dim_sentimen s ON s.id_sentimen = f.id_sentimen
         JOIN dim_waktu w ON w.id_waktu = f.id_waktu
         WHERE f.id_model = %s {wh}
-        GROUP BY a.nama_aplikasi, DATE_TRUNC('week', w.tanggal), s.label_sentimen
-        ORDER BY DATE_TRUNC('week', w.tanggal)
+        GROUP BY a.nama_aplikasi, DATE_TRUNC('month', w.tanggal), s.label_sentimen
+        ORDER BY DATE_TRUNC('month', w.tanggal)
     """
     df = kueri(sql, tuple(parm))
     if not df.empty:
@@ -901,34 +901,33 @@ def halaman_sentimen() -> None:
         tutup_kartu()
 
     with col_b:
-        mulai_kartu("Tren Jumlah Ulasan per Minggu")
-        tren = sentimen_mingguan(aplikasi, dari, sampai, tahun)
+        mulai_kartu("Tren Jumlah Ulasan per Bulan")
+        tren = sentimen_bulanan(aplikasi, dari, sampai, tahun)
         if tren.empty:
             st.caption("Tidak ada data untuk filter ini.")
         else:
-            tren["minggu_str"] = pd.to_datetime(tren["minggu"]).dt.strftime("%d %b %Y")
             fig = go.Figure()
             for app in sorted(tren["aplikasi"].unique()):
                 warna = warna_aplikasi(app)
-                pos_s = tren[(tren["aplikasi"] == app) & (tren["label"] == "Positif")].sort_values("minggu")
-                neg_s = tren[(tren["aplikasi"] == app) & (tren["label"] == "Negatif")].sort_values("minggu")
+                pos_s = tren[(tren["aplikasi"] == app) & (tren["label"] == "Positif")].sort_values("bulan")
+                neg_s = tren[(tren["aplikasi"] == app) & (tren["label"] == "Negatif")].sort_values("bulan")
                 fig.add_trace(go.Scatter(
-                    x=pos_s["minggu"], y=pos_s["jumlah"], mode="lines+markers",
+                    x=pos_s["bulan"], y=pos_s["jumlah"], mode="lines+markers",
                     name=app, legendgroup=app,
-                    line=dict(color=warna, width=2.5, shape="spline"),
-                    marker=dict(size=7, color=warna, line=dict(color=warna, width=1)),
-                    hovertemplate=f"<b>{app}</b> · Positif<br>%{{x|%d %b %Y}}<br>%{{y:,}} ulasan<extra></extra>",
+                    line=dict(color=warna, width=2.8, shape="spline", smoothing=0.8),
+                    marker=dict(size=8, color=warna, line=dict(color="white", width=1.5)),
+                    hovertemplate=f"<b>{app}</b> · Positif<br>%{{x|%b %Y}}<br>%{{y:,}} ulasan<extra></extra>",
                 ))
                 fig.add_trace(go.Scatter(
-                    x=neg_s["minggu"], y=neg_s["jumlah"], mode="lines+markers",
+                    x=neg_s["bulan"], y=neg_s["jumlah"], mode="lines+markers",
                     name=app, legendgroup=app, showlegend=False,
-                    line=dict(color=warna, width=2.5, dash="dash", shape="spline"),
-                    marker=dict(size=7, color="white", line=dict(color=warna, width=2)),
-                    hovertemplate=f"<b>{app}</b> · Negatif<br>%{{x|%d %b %Y}}<br>%{{y:,}} ulasan<extra></extra>",
+                    line=dict(color=warna, width=2.2, dash="dash", shape="spline", smoothing=0.8),
+                    marker=dict(size=8, color="white", line=dict(color=warna, width=2)),
+                    hovertemplate=f"<b>{app}</b> · Negatif<br>%{{x|%b %Y}}<br>%{{y:,}} ulasan<extra></extra>",
                 ))
             fig.add_trace(go.Scatter(
                 x=[None], y=[None], mode="markers",
-                marker=dict(size=10, color="#334155", line=dict(color="#334155", width=1)),
+                marker=dict(size=10, color="#334155", line=dict(color="white", width=1.5)),
                 name="Positif", legendgroup="legend_sym",
             ))
             fig.add_trace(go.Scatter(
@@ -939,18 +938,19 @@ def halaman_sentimen() -> None:
             fig.update_layout(
                 xaxis=dict(
                     title="",
-                    tickfont=dict(size=10, family="Inter"),
-                    showgrid=True, gridcolor="#F8FAFC",
-                    tickformat="%d %b %Y",
-                    nticks=12,
-                    tickangle=-40,
+                    tickfont=dict(size=10, family="Inter", color="#475569"),
+                    showgrid=True, gridcolor="#F1F5F9",
+                    tickformat="%b %Y",
+                    dtick="M1",
+                    tickangle=-45,
+                    showline=True, linecolor="#CBD5E1",
                 ),
-                yaxis=dict(title="", tickfont=dict(size=11, family="Inter"), showgrid=True, gridcolor="#F1F5F9",
+                yaxis=dict(title="", tickfont=dict(size=11, family="Inter", color="#475569"), showgrid=True, gridcolor="#F1F5F9",
                            tickformat=",d", separatethousands=True),
-                height=380, margin=dict(l=10, r=10, t=10, b=90),
-                legend=dict(orientation="h", yanchor="bottom", y=-0.3, xanchor="center", x=0.5, font=dict(size=10, family="Inter")),
+                height=400, margin=dict(l=10, r=10, t=10, b=100),
+                legend=dict(orientation="h", yanchor="bottom", y=-0.32, xanchor="center", x=0.5, font=dict(size=11, family="Inter")),
                 paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-                hovermode="closest",
+                hovermode="x unified",
             )
             st.plotly_chart(fig, use_container_width=True)
         tutup_kartu()
@@ -1045,6 +1045,84 @@ def halaman_performa() -> None:
         unsafe_allow_html=True,
     )
     st.caption("Model terbaik ditandai ★ berdasarkan macro-F1; selisih kurang dari 0,01 dianggap setara. Precision, recall, dan F1 dihitung untuk kelas positif.")
+    tutup_kartu()
+
+    # Confusion Matrix
+    mulai_kartu("Confusion Matrix per Aplikasi dan Algoritma")
+    st.caption("Membandingkan prediksi model dengan label aktual pada data uji. Diagonal (hijau tua) menunjukkan prediksi benar; sel luar diagonal (merah muda) menunjukkan kesalahan klasifikasi.")
+    df_metrik = metrik_model()
+    if df_metrik.empty:
+        st.info("Belum ada data uji untuk membuat confusion matrix.")
+    else:
+        aplikasi_list = sorted(df_metrik["aplikasi"].unique())
+        if f_app != "Semua aplikasi": aplikasi_list = [a for a in aplikasi_list if a == f_app]
+        for app in aplikasi_list:
+            st.markdown(
+                f'<div style="color:{warna_aplikasi(app)}; font-weight:700; font-size:1.05rem; margin:1rem 0 0.5rem 0;">{app}</div>',
+                unsafe_allow_html=True,
+            )
+            sub_metrik = df_metrik[df_metrik["aplikasi"] == app]
+            model_list = sorted(sub_metrik["model"].unique())
+            if f_model != "Semua algoritma": model_list = [m for m in model_list if m == f_model]
+            if not model_list: continue
+            kolom_cm = st.columns(len(model_list))
+            for idx, model_nama in enumerate(model_list):
+                sub_mm = sub_metrik[sub_metrik["model"] == model_nama]
+                cm = {(a, p): int(n) for a, p, n in zip(sub_mm["aktual"], sub_mm["prediksi"], sub_mm["n"])}
+                tp = cm.get(("Positif", "Positif"), 0)
+                fn = cm.get(("Positif", "Negatif"), 0)
+                fp = cm.get(("Negatif", "Positif"), 0)
+                tn = cm.get(("Negatif", "Negatif"), 0)
+                total = tp + fn + fp + tn
+                acc = ((tp + tn) / total * 100) if total else 0.0
+                pct_tp = (tp / total * 100) if total else 0.0
+                pct_fn = (fn / total * 100) if total else 0.0
+                pct_fp = (fp / total * 100) if total else 0.0
+                pct_tn = (tn / total * 100) if total else 0.0
+                acc_s = f"{acc:.2f}%".replace(".", ",")
+                with kolom_cm[idx]:
+                    st.markdown(
+                        f'<div style="background:#F8FAFC; border:1px solid #E2E8F0; border-radius:12px; padding:1rem;">'
+                        f'<div style="color:{HD_DARK}; font-weight:700; font-size:0.95rem; margin-bottom:0.3rem;">{model_nama}</div>'
+                        f'<div style="color:#64748B; font-size:0.78rem; margin-bottom:0.8rem;">Akurasi {acc_s} · total {total:,}</div>'.replace(",", "."),
+                        unsafe_allow_html=True,
+                    )
+                    tabel_html = (
+                        '<table style="width:100%; border-collapse:separate; border-spacing:4px; font-family:Inter;">'
+                        '<tr>'
+                        '<td style="padding:0.4rem;"></td>'
+                        '<td colspan="2" style="text-align:center; font-size:0.72rem; color:#64748B; text-transform:uppercase; letter-spacing:0.4px; padding-bottom:0.3rem;"><b>Prediksi</b></td>'
+                        '</tr>'
+                        '<tr>'
+                        '<td style="padding:0.4rem;"></td>'
+                        '<td style="text-align:center; font-size:0.78rem; color:#0A3B5E; font-weight:600; padding:0.3rem;">Positif</td>'
+                        '<td style="text-align:center; font-size:0.78rem; color:#0A3B5E; font-weight:600; padding:0.3rem;">Negatif</td>'
+                        '</tr>'
+                        '<tr>'
+                        '<td style="text-align:center; font-size:0.78rem; color:#0A3B5E; font-weight:600; padding:0.3rem; writing-mode:vertical-rl; transform:rotate(180deg);">Aktual Positif</td>'
+                        f'<td style="background:linear-gradient(135deg,#10B981,#059669); color:white; text-align:center; padding:1.2rem 0.5rem; border-radius:8px; font-weight:700;">'
+                        f'<div style="font-size:1.4rem; line-height:1;">{tp:,}</div>'.replace(",", ".")
+                        + f'<div style="font-size:0.72rem; opacity:0.9; margin-top:0.2rem;">TP · {pct_tp:.1f}%</div>'.replace(".", ",")
+                        + '</td>'
+                        f'<td style="background:#FEE2E2; color:#991B1B; text-align:center; padding:1.2rem 0.5rem; border-radius:8px; font-weight:700;">'
+                        f'<div style="font-size:1.4rem; line-height:1;">{fn:,}</div>'.replace(",", ".")
+                        + f'<div style="font-size:0.72rem; opacity:0.9; margin-top:0.2rem;">FN · {pct_fn:.1f}%</div>'.replace(".", ",")
+                        + '</td>'
+                        '</tr>'
+                        '<tr>'
+                        '<td style="text-align:center; font-size:0.78rem; color:#0A3B5E; font-weight:600; padding:0.3rem;">Aktual Negatif</td>'
+                        f'<td style="background:#FEE2E2; color:#991B1B; text-align:center; padding:1.2rem 0.5rem; border-radius:8px; font-weight:700;">'
+                        f'<div style="font-size:1.4rem; line-height:1;">{fp:,}</div>'.replace(",", ".")
+                        + f'<div style="font-size:0.72rem; opacity:0.9; margin-top:0.2rem;">FP · {pct_fp:.1f}%</div>'.replace(".", ",")
+                        + '</td>'
+                        f'<td style="background:linear-gradient(135deg,#10B981,#059669); color:white; text-align:center; padding:1.2rem 0.5rem; border-radius:8px; font-weight:700;">'
+                        f'<div style="font-size:1.4rem; line-height:1;">{tn:,}</div>'.replace(",", ".")
+                        + f'<div style="font-size:0.72rem; opacity:0.9; margin-top:0.2rem;">TN · {pct_tn:.1f}%</div>'.replace(".", ",")
+                        + '</td>'
+                        '</tr>'
+                        '</table>'
+                    )
+                    st.markdown(tabel_html + '</div>', unsafe_allow_html=True)
     tutup_kartu()
 
     col_grafik, col_rek = st.columns([1.3, 1])
