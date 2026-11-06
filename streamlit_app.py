@@ -780,22 +780,40 @@ def halaman_sentimen() -> None:
                 warna = warna_aplikasi(app)
                 pos_s = tren[(tren["aplikasi"] == app) & (tren["label"] == "Positif")].sort_values("bulan")
                 neg_s = tren[(tren["aplikasi"] == app) & (tren["label"] == "Negatif")].sort_values("bulan")
+                # Positif - garis solid dengan titik berisi
                 fig.add_trace(go.Scatter(
                     x=pos_s["bulan"], y=pos_s["jumlah"], mode="lines+markers",
-                    name=f"{app} (Positif)", line=dict(color=warna, width=2),
-                    marker=dict(size=6),
+                    name=app, legendgroup=app,
+                    line=dict(color=warna, width=2.2),
+                    marker=dict(size=7, color=warna, line=dict(color=warna, width=1)),
+                    hovertemplate=f"<b>{app}</b> (Positif)<br>%{{x}}: %{{y:,}} ulasan<extra></extra>",
                 ))
+                # Negatif - garis putus dengan titik kosong (hollow)
                 fig.add_trace(go.Scatter(
                     x=neg_s["bulan"], y=neg_s["jumlah"], mode="lines+markers",
-                    name=f"{app} (Negatif)", line=dict(color=warna, width=2, dash="dash"),
-                    marker=dict(size=6),
+                    name=app, legendgroup=app, showlegend=False,
+                    line=dict(color=warna, width=2.2, dash="dash"),
+                    marker=dict(size=7, color="white", line=dict(color=warna, width=2)),
+                    hovertemplate=f"<b>{app}</b> (Negatif)<br>%{{x}}: %{{y:,}} ulasan<extra></extra>",
                 ))
+            # Trace dummy untuk legend simbol Positif/Negatif
+            fig.add_trace(go.Scatter(
+                x=[None], y=[None], mode="markers",
+                marker=dict(size=9, color="#333", line=dict(color="#333", width=1)),
+                name="Positif", legendgroup="legend_sym",
+            ))
+            fig.add_trace(go.Scatter(
+                x=[None], y=[None], mode="markers",
+                marker=dict(size=9, color="white", line=dict(color="#333", width=2)),
+                name="Negatif", legendgroup="legend_sym",
+            ))
             fig.update_layout(
-                xaxis=dict(title="", tickangle=-45, tickfont=dict(size=9)),
+                xaxis=dict(title="", tickangle=-45, tickfont=dict(size=9), showgrid=False),
                 yaxis=dict(title="", tickfont=dict(size=11), showgrid=True, gridcolor="#eee"),
-                height=360, margin=dict(l=10, r=10, t=10, b=50),
-                legend=dict(orientation="h", yanchor="bottom", y=-0.3, xanchor="center", x=0.5, font=dict(size=9)),
+                height=360, margin=dict(l=10, r=10, t=10, b=70),
+                legend=dict(orientation="h", yanchor="bottom", y=-0.35, xanchor="center", x=0.5, font=dict(size=10)),
                 paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+                hovermode="closest",
             )
             st.plotly_chart(fig, use_container_width=True)
         tutup_kartu()
@@ -845,20 +863,51 @@ def halaman_performa() -> None:
     )
 
     mulai_kartu("Tabel Perbandingan Metrik Evaluasi (data uji)")
-    rows = []
+    # Custom HTML table dengan highlight hijau untuk model terbaik
+    header_html = (
+        '<tr style="background:#E8F1F7; color:#0F3F5E;">'
+        '<th style="padding:0.5rem 0.8rem; text-align:left;">Aplikasi</th>'
+        '<th style="padding:0.5rem 0.8rem; text-align:left;">Algoritma</th>'
+        '<th style="padding:0.5rem 0.8rem; text-align:right;">Accuracy</th>'
+        '<th style="padding:0.5rem 0.8rem; text-align:right;">Precision</th>'
+        '<th style="padding:0.5rem 0.8rem; text-align:right;">Recall</th>'
+        '<th style="padding:0.5rem 0.8rem; text-align:right;">F1</th>'
+        '<th style="padding:0.5rem 0.8rem; text-align:right;">Macro-F1</th>'
+        '<th style="padding:0.5rem 0.8rem; text-align:right;">Waktu latih (detik)</th>'
+        '</tr>'
+    )
+    baris_html = []
     for _, r in sub.iterrows():
-        bintang = " ★" if terbaik_per_app.get(r["aplikasi"]) == r["model"] else ""
-        rows.append({
-            "Aplikasi": r["aplikasi"],
-            "Algoritma": f"{r['model']}{bintang}",
-            "Accuracy": f"{r['accuracy']:.4f}".replace(".", ","),
-            "Precision": f"{r['precision_pos']:.4f}".replace(".", ","),
-            "Recall": f"{r['recall_pos']:.4f}".replace(".", ","),
-            "F1": f"{r['f1_pos']:.4f}".replace(".", ","),
-            "Macro-F1": f"{r['macro_f1']:.4f}".replace(".", ","),
-            "Waktu latih (detik)": str(r["waktu_latih"]).replace(".", ",") if pd.notna(r["waktu_latih"]) else "-",
-        })
-    st.table(pd.DataFrame(rows))
+        terbaik = terbaik_per_app.get(r["aplikasi"]) == r["model"]
+        bg = "#E8F7E8" if terbaik else "transparent"
+        warna_teks = "#0F3F5E" if terbaik else "#333"
+        tebal = "font-weight:600;" if terbaik else ""
+        bintang = ' <span style="color:#F59E0B;">★</span>' if terbaik else ""
+        acc_s = ("%.4f" % r["accuracy"]).replace(".", ",")
+        prec_s = ("%.4f" % r["precision_pos"]).replace(".", ",")
+        rec_s = ("%.4f" % r["recall_pos"]).replace(".", ",")
+        f1_s = ("%.4f" % r["f1_pos"]).replace(".", ",")
+        mf1_s = ("%.4f" % r["macro_f1"]).replace(".", ",")
+        wl_s = str(r["waktu_latih"]).replace(".", ",") if pd.notna(r["waktu_latih"]) else "-"
+        baris_html.append(
+            '<tr style="background:' + bg + '; color:' + warna_teks + '; ' + tebal + '">'
+            '<td style="padding:0.5rem 0.8rem; border-top:1px solid #eee;">' + str(r["aplikasi"]) + '</td>'
+            '<td style="padding:0.5rem 0.8rem; border-top:1px solid #eee;">' + str(r["model"]) + bintang + '</td>'
+            '<td style="padding:0.5rem 0.8rem; border-top:1px solid #eee; text-align:right;">' + acc_s + '</td>'
+            '<td style="padding:0.5rem 0.8rem; border-top:1px solid #eee; text-align:right;">' + prec_s + '</td>'
+            '<td style="padding:0.5rem 0.8rem; border-top:1px solid #eee; text-align:right;">' + rec_s + '</td>'
+            '<td style="padding:0.5rem 0.8rem; border-top:1px solid #eee; text-align:right;">' + f1_s + '</td>'
+            '<td style="padding:0.5rem 0.8rem; border-top:1px solid #eee; text-align:right;">' + mf1_s + '</td>'
+            '<td style="padding:0.5rem 0.8rem; border-top:1px solid #eee; text-align:right;">' + wl_s + '</td>'
+            '</tr>'
+        )
+    st.markdown(
+        '<table style="width:100%; border-collapse:collapse; font-size:0.88rem;">'
+        + '<thead>' + header_html + '</thead>'
+        + '<tbody>' + "".join(baris_html) + '</tbody>'
+        + '</table>',
+        unsafe_allow_html=True,
+    )
     st.caption("Model terbaik ditandai ★ berdasarkan macro-F1; selisih kurang dari 0,01 dianggap setara. Precision, recall, dan F1 dihitung untuk kelas positif.")
     tutup_kartu()
 
