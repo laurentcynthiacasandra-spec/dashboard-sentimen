@@ -185,29 +185,29 @@ st.markdown(
     
 
     /* Nav pill (radio horizontal styled as pills) */
-    .stRadio > div[role="radiogroup"] {
+    .stRadio > div[role="radiogroup"] {{
         gap: 6px; flex-wrap: wrap; justify-content: center;
         background: transparent; margin-bottom: 0.8rem;
-    }
-    .stRadio > div[role="radiogroup"] > label {
+    }}
+    .stRadio > div[role="radiogroup"] > label {{
         background: #FFFFFF !important; border: 1px solid #E5DED9 !important;
         padding: 0.45rem 1.1rem !important; border-radius: 22px !important;
         margin: 0 !important; cursor: pointer; font-weight: 500;
         color: #6B7A8F !important; transition: all 0.15s ease;
-    }
-    .stRadio > div[role="radiogroup"] > label:hover {
+    }}
+    .stRadio > div[role="radiogroup"] > label:hover {{
         background: #F8F5F3 !important; border-color: #175A85 !important;
-    }
-    .stRadio > div[role="radiogroup"] > label:has(input:checked) {
+    }}
+    .stRadio > div[role="radiogroup"] > label:has(input:checked) {{
         background: #175A85 !important; color: white !important; border-color: #175A85 !important;
-    }
-    .stRadio > div[role="radiogroup"] > label > div:first-child {display: none !important;}
-    .stRadio > div[role="radiogroup"] > label > div:last-child p {color: inherit !important;}
+    }}
+    .stRadio > div[role="radiogroup"] > label > div:first-child {{display: none !important;}}
+    .stRadio > div[role="radiogroup"] > label > div:last-child p {{color: inherit !important;}}
 
     /* Donat chart (Distribusi Sentimen) container */
-    .kartu [data-testid="stPlotlyChart"] {
+    .kartu [data-testid="stPlotlyChart"] {{
         max-width: 100%; overflow: hidden;
-    }
+    }}
     </style>
     """,
     unsafe_allow_html=True,
