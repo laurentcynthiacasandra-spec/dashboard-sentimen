@@ -1,5 +1,6 @@
 """Dashboard Analisis Sentimen Instagram, TikTok, dan X."""
 import os
+from contextlib import contextmanager
 from datetime import date
 
 import bcrypt
@@ -53,6 +54,8 @@ st.markdown(
     """
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+    @import url('https://fonts.googleapis.com/icon?family=Material+Icons');
+    @import url('https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0');
 
     html, body, [data-testid="stAppViewContainer"] * {
         font-family: 'Inter', -apple-system, sans-serif !important;
@@ -187,6 +190,14 @@ st.markdown(
         color: #0A3B5E; font-weight: 700; font-size: 1.05rem;
         margin-bottom: 1rem; letter-spacing: -0.01em;
     }
+    /* st.container(border=True) distyling seperti .kartu */
+    .main [data-testid="stVerticalBlockBorderWrapper"] {
+        background: #FFFFFF;
+        border-radius: 12px !important;
+        border: 1px solid #E2E8F0 !important;
+        padding: 1rem 1.3rem !important;
+        margin-bottom: 1rem;
+    }
 
     /* Insight bullets */
     .insight {display: flex; gap: 0.7rem; padding: 0.4rem 0; align-items: flex-start;}
@@ -251,6 +262,36 @@ st.markdown(
         background: linear-gradient(135deg, #0A3B5E 0%, #062843 100%) !important;
         box-shadow: 0 4px 14px rgba(30,90,138,0.3);
         transform: translateY(-1px);
+    }
+
+    /* Password visibility toggle → ikon mata SVG, sembunyikan teks "visibility" */
+    [data-testid="stPasswordVisibilityToggleButton"] {
+        padding: 0 0.3rem !important;
+        min-width: 32px !important;
+    }
+    [data-testid="stPasswordVisibilityToggleButton"] svg {
+        display: block !important;
+        width: 20px; height: 20px;
+    }
+    [data-testid="stPasswordVisibilityToggleButton"] span,
+    [data-testid="stPasswordVisibilityToggleButton"] p,
+    button[kind="headerNoPadding"][aria-label*="visibility"] span,
+    button[kind="headerNoPadding"][aria-label*="password"] span {
+        font-family: 'Material Icons', 'Material Symbols Outlined' !important;
+        font-size: 20px !important;
+        font-weight: normal !important;
+        font-style: normal !important;
+        line-height: 1 !important;
+        letter-spacing: normal !important;
+        text-transform: none !important;
+        white-space: nowrap !important;
+        word-wrap: normal !important;
+        -webkit-font-feature-settings: 'liga' !important;
+        -webkit-font-smoothing: antialiased !important;
+        font-feature-settings: 'liga' !important;
+        color: #64748B !important;
+        overflow: hidden !important;
+        max-width: 24px !important;
     }
 
     /* Input & selectbox modern */
@@ -717,7 +758,17 @@ def kartu_aplikasi(nama: str, positif: int, negatif: int, total: int) -> None:
     )
 
 
+@contextmanager
+def kartu(judul: str = ""):
+    """Membungkus semua komponen Streamlit di dalamnya sebagai satu kartu."""
+    with st.container(border=True):
+        if judul:
+            st.markdown(f'<div class="kartu-judul">{judul}</div>', unsafe_allow_html=True)
+        yield
+
+
 def mulai_kartu(judul: str) -> None:
+    """Dipertahankan hanya untuk kompatibilitas; gunakan `with kartu()`."""
     st.markdown(f'<div class="kartu"><div class="kartu-judul">{judul}</div>', unsafe_allow_html=True)
 
 
@@ -766,67 +817,64 @@ def halaman_ringkasan() -> None:
     pos_app = pos_app.sort_values("aplikasi")
 
     with col_bar:
-        mulai_kartu("Persentase Sentimen Positif per Aplikasi")
-        warna_app = [warna_aplikasi(a) for a in pos_app["aplikasi"]]
-        fig = go.Figure(go.Bar(
-            x=pos_app["pct"], y=pos_app["aplikasi"], orientation="h",
-            marker_color=warna_app,
-            text=pos_app["pct"].apply(lambda v: f"{v:.1f}%".replace(".", ",")),
-            textposition="outside", textfont=dict(size=12, color=HD_DARK, family="Inter"),
-        ))
-        fig.update_layout(
-            xaxis=dict(range=[0, 100], title="% positif", showgrid=True, gridcolor="#F1F5F9"),
-            yaxis=dict(title="", tickfont=dict(size=13, family="Inter")),
-            height=280, margin=dict(l=10, r=40, t=10, b=30),
-            paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-        )
-        st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
-        tutup_kartu()
+        with kartu("Persentase Sentimen Positif per Aplikasi"):
+            warna_app = [warna_aplikasi(a) for a in pos_app["aplikasi"]]
+            fig = go.Figure(go.Bar(
+                x=pos_app["pct"], y=pos_app["aplikasi"], orientation="h",
+                marker_color=warna_app,
+                text=pos_app["pct"].apply(lambda v: f"{v:.1f}%".replace(".", ",")),
+                textposition="outside", textfont=dict(size=12, color=HD_DARK, family="Inter"),
+            ))
+            fig.update_layout(
+                xaxis=dict(range=[0, 100], title="% positif", showgrid=True, gridcolor="#F1F5F9"),
+                yaxis=dict(title="", tickfont=dict(size=13, family="Inter")),
+                height=280, margin=dict(l=10, r=40, t=10, b=30),
+                paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+            )
+            st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
 
     with col_pie:
-        mulai_kartu("Distribusi Sentimen Keseluruhan")
-        pos_total = int(rincian[rincian["label"] == "Positif"]["jumlah"].sum())
-        neg_total = int(rincian[rincian["label"] == "Negatif"]["jumlah"].sum())
-        fig = go.Figure(data=[go.Pie(
-            labels=[f"Positif ({pos_total:,})".replace(",", "."),
-                    f"Negatif ({neg_total:,})".replace(",", ".")],
-            values=[pos_total, neg_total],
-            marker=dict(colors=[POS, NEG], line=dict(color="white", width=3)),
-            hole=0.6, textinfo="none",
-        )])
-        fig.update_layout(
-            margin=dict(l=20, r=20, t=10, b=30), height=280,
-            showlegend=True,
-            legend=dict(orientation="h", yanchor="bottom", y=-0.1, xanchor="center", x=0.5, font=dict(size=12, family="Inter")),
-            paper_bgcolor="rgba(0,0,0,0)",
-        )
-        st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
-        tutup_kartu()
+        with kartu("Distribusi Sentimen Keseluruhan"):
+            pos_total = int(rincian[rincian["label"] == "Positif"]["jumlah"].sum())
+            neg_total = int(rincian[rincian["label"] == "Negatif"]["jumlah"].sum())
+            fig = go.Figure(data=[go.Pie(
+                labels=[f"Positif ({pos_total:,})".replace(",", "."),
+                        f"Negatif ({neg_total:,})".replace(",", ".")],
+                values=[pos_total, neg_total],
+                marker=dict(colors=[POS, NEG], line=dict(color="white", width=3)),
+                hole=0.6, textinfo="none",
+            )])
+            fig.update_layout(
+                margin=dict(l=20, r=20, t=10, b=30), height=280,
+                showlegend=True,
+                legend=dict(orientation="h", yanchor="bottom", y=-0.1, xanchor="center", x=0.5, font=dict(size=12, family="Inter")),
+                paper_bgcolor="rgba(0,0,0,0)",
+            )
+            st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
 
-    mulai_kartu("Insight Utama")
-    if len(pos_app) >= 1:
-        tgi = pos_app.sort_values("pct", ascending=False).iloc[0]
-        trd = pos_app.sort_values("pct", ascending=True).iloc[0]
-        t1 = f"{tgi['pct']:.1f}%".replace(".", ",")
-        t2 = f"{trd['pct']:.1f}%".replace(".", ",")
-        st.markdown(
-            f'<div class="insight"><div class="insight-dot"></div>'
-            f'<div class="insight-text"><b>{tgi["aplikasi"]}</b> memiliki proporsi sentimen positif tertinggi '
-            f'({t1}), sedangkan <b>{trd["aplikasi"]}</b> terendah ({t2}).</div></div>',
-            unsafe_allow_html=True,
-        )
-    perf = performa_semua()
-    for app in data["aplikasi"]:
-        sub_app = perf[perf["aplikasi"] == app].sort_values("macro_f1", ascending=False)
-        if not sub_app.empty:
-            tb = sub_app.iloc[0]
-            f1 = f"{tb['macro_f1']:.4f}".replace(".", ",")
+    with kartu("Insight Utama"):
+        if len(pos_app) >= 1:
+            tgi = pos_app.sort_values("pct", ascending=False).iloc[0]
+            trd = pos_app.sort_values("pct", ascending=True).iloc[0]
+            t1 = f"{tgi['pct']:.1f}%".replace(".", ",")
+            t2 = f"{trd['pct']:.1f}%".replace(".", ",")
             st.markdown(
                 f'<div class="insight"><div class="insight-dot"></div>'
-                f'<div class="insight-text">Pada <b>{app}</b>, model terbaik adalah <b>{tb["model"]}</b> (macro-F1 {f1}).</div></div>',
+                f'<div class="insight-text"><b>{tgi["aplikasi"]}</b> memiliki proporsi sentimen positif tertinggi '
+                f'({t1}), sedangkan <b>{trd["aplikasi"]}</b> terendah ({t2}).</div></div>',
                 unsafe_allow_html=True,
             )
-    tutup_kartu()
+        perf = performa_semua()
+        for app in data["aplikasi"]:
+            sub_app = perf[perf["aplikasi"] == app].sort_values("macro_f1", ascending=False)
+            if not sub_app.empty:
+                tb = sub_app.iloc[0]
+                f1 = f"{tb['macro_f1']:.4f}".replace(".", ",")
+                st.markdown(
+                    f'<div class="insight"><div class="insight-dot"></div>'
+                    f'<div class="insight-text">Pada <b>{app}</b>, model terbaik adalah <b>{tb["model"]}</b> (macro-F1 {f1}).</div></div>',
+                    unsafe_allow_html=True,
+                )
 
 
 # ---------------------------------------------------------------------------
@@ -836,33 +884,32 @@ def halaman_sentimen() -> None:
     page_title("Perbandingan Sentimen", "Analisis proporsi sentimen antar aplikasi dan selang waktu")
     data = ringkasan_global()
 
-    mulai_kartu("Filter")
-    c1, c2, c3, c4 = st.columns([1.2, 1, 1, 1])
-    with c1:
-        aplikasi = st.selectbox("Aplikasi", ["Semua aplikasi"] + data["aplikasi"], key="fs_app")
-    with c2:
-        tahun_opsi = ["Semua tahun"] + [str(t) for t in daftar_tahun()]
-        tahun = st.selectbox("Tahun", tahun_opsi, key="fs_tahun")
-    mn, mx = rentang_tanggal(aplikasi)
-    with c3:
-        dari = st.date_input("Dari tanggal", value=None, min_value=mn, max_value=mx,
-                             key="fs_dari", format="DD/MM/YYYY")
-    with c4:
-        sampai = st.date_input("Sampai tanggal", value=None, min_value=mn, max_value=mx,
-                               key="fs_sampai", format="DD/MM/YYYY")
+    with kartu("Filter"):
+        c1, c2, c3, c4 = st.columns([1.2, 1, 1, 1])
+        with c1:
+            aplikasi = st.selectbox("Aplikasi", ["Semua aplikasi"] + data["aplikasi"], key="fs_app")
+        with c2:
+            tahun_opsi = ["Semua tahun"] + [str(t) for t in daftar_tahun()]
+            tahun = st.selectbox("Tahun", tahun_opsi, key="fs_tahun")
+        mn, mx = rentang_tanggal(aplikasi)
+        with c3:
+            dari = st.date_input("Dari tanggal", value=None, min_value=mn, max_value=mx,
+                                 key="fs_dari", format="DD/MM/YYYY")
+        with c4:
+            sampai = st.date_input("Sampai tanggal", value=None, min_value=mn, max_value=mx,
+                                   key="fs_sampai", format="DD/MM/YYYY")
 
-    c6, c7 = st.columns([3, 1])
-    with c6:
-        model_opsi = ["Semua algoritma"] + daftar_model()
-        model = st.selectbox("Algoritma", model_opsi, key="fs_model")
-    with c7:
-        st.write("")
-        st.write("")
-        if st.button("Atur ulang", use_container_width=True):
-            for k in ["fs_app", "fs_tahun", "fs_dari", "fs_sampai", "fs_model"]:
-                st.session_state.pop(k, None)
-            st.rerun()
-    tutup_kartu()
+        c6, c7 = st.columns([3, 1])
+        with c6:
+            model_opsi = ["Semua algoritma"] + daftar_model()
+            model = st.selectbox("Algoritma", model_opsi, key="fs_model")
+        with c7:
+            st.write("")
+            st.write("")
+            if st.button("Atur ulang", use_container_width=True):
+                for k in ["fs_app", "fs_tahun", "fs_dari", "fs_sampai", "fs_model"]:
+                    st.session_state.pop(k, None)
+                st.rerun()
 
     if dari and sampai and dari > sampai:
         st.error("Tanggal 'Dari' tidak boleh lebih besar dari 'Sampai'.")
@@ -899,90 +946,87 @@ def halaman_sentimen() -> None:
 
     col_a, col_b = st.columns(2)
     with col_a:
-        mulai_kartu("Proporsi Sentimen Positif vs Negatif")
-        fig = go.Figure()
-        fig.add_trace(go.Bar(
-            name="Positif", x=pivot["aplikasi"], y=pivot["Pos_pct"], marker_color=POS,
-        ))
-        fig.add_trace(go.Bar(
-            name="Negatif", x=pivot["aplikasi"], y=pivot["Neg_pct"], marker_color=NEG,
-        ))
-        fig.update_layout(
-            barmode="stack",
-            xaxis=dict(title="", tickfont=dict(size=13, family="Inter")),
-            yaxis=dict(title="", range=[0, 100], ticksuffix="%", tickfont=dict(size=11, family="Inter"),
-                       showgrid=True, gridcolor="#F1F5F9"),
-            height=380, margin=dict(l=10, r=10, t=30, b=10),
-            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0, title=""),
-            paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-        )
-        st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
-        tutup_kartu()
-
-    with col_b:
-        mulai_kartu("Tren Jumlah Ulasan per Bulan")
-        tren = sentimen_bulanan(aplikasi, dari, sampai, tahun, model)
-        if tren.empty:
-            st.caption("Tidak ada data untuk filter ini.")
-        else:
+        with kartu("Proporsi Sentimen Positif vs Negatif"):
             fig = go.Figure()
-            for app in sorted(tren["aplikasi"].unique()):
-                warna = warna_aplikasi(app)
-                pos_s = tren[(tren["aplikasi"] == app) & (tren["label"] == "Positif")].sort_values("bulan")
-                neg_s = tren[(tren["aplikasi"] == app) & (tren["label"] == "Negatif")].sort_values("bulan")
-                fig.add_trace(go.Scatter(
-                    x=pos_s["bulan"], y=pos_s["jumlah"], mode="lines+markers",
-                    name=app, legendgroup=app,
-                    line=dict(color=warna, width=2.8, shape="spline", smoothing=0.8),
-                    marker=dict(size=8, color=warna, line=dict(color="white", width=1.5)),
-                    hovertemplate=f"<b>{app}</b> · Positif<br>%{{x|%b %Y}}<br>%{{y:,}} ulasan<extra></extra>",
-                ))
-                fig.add_trace(go.Scatter(
-                    x=neg_s["bulan"], y=neg_s["jumlah"], mode="lines+markers",
-                    name=app, legendgroup=app, showlegend=False,
-                    line=dict(color=warna, width=2.2, dash="dash", shape="spline", smoothing=0.8),
-                    marker=dict(size=8, color="white", line=dict(color=warna, width=2)),
-                    hovertemplate=f"<b>{app}</b> · Negatif<br>%{{x|%b %Y}}<br>%{{y:,}} ulasan<extra></extra>",
-                ))
-            fig.add_trace(go.Scatter(
-                x=[None], y=[None], mode="markers",
-                marker=dict(size=10, color="#334155", line=dict(color="white", width=1.5)),
-                name="Positif", legendgroup="legend_sym",
+            fig.add_trace(go.Bar(
+                name="Positif", x=pivot["aplikasi"], y=pivot["Pos_pct"], marker_color=POS,
             ))
-            fig.add_trace(go.Scatter(
-                x=[None], y=[None], mode="markers",
-                marker=dict(size=10, color="white", line=dict(color="#334155", width=2)),
-                name="Negatif", legendgroup="legend_sym",
+            fig.add_trace(go.Bar(
+                name="Negatif", x=pivot["aplikasi"], y=pivot["Neg_pct"], marker_color=NEG,
             ))
             fig.update_layout(
-                xaxis=dict(
-                    title="",
-                    tickfont=dict(size=10, family="Inter", color="#475569"),
-                    showgrid=True, gridcolor="#F1F5F9",
-                    tickformat="%b %Y",
-                    dtick="M1",
-                    tickangle=-45,
-                    showline=True, linecolor="#CBD5E1",
-                ),
-                yaxis=dict(title="", tickfont=dict(size=11, family="Inter", color="#475569"), showgrid=True, gridcolor="#F1F5F9",
-                           tickformat=",d", separatethousands=True),
-                height=460, margin=dict(l=10, r=10, t=10, b=150),
-                legend=dict(orientation="h", yanchor="bottom", y=-0.48, xanchor="center", x=0.5, font=dict(size=11, family="Inter")),
+                barmode="stack",
+                xaxis=dict(title="", tickfont=dict(size=13, family="Inter")),
+                yaxis=dict(title="", range=[0, 100], ticksuffix="%", tickfont=dict(size=11, family="Inter"),
+                           showgrid=True, gridcolor="#F1F5F9"),
+                height=380, margin=dict(l=10, r=10, t=30, b=10),
+                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0, title=""),
                 paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-                hovermode="x unified",
             )
-            st.plotly_chart(fig, use_container_width=True)
-        tutup_kartu()
+            st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
 
-    mulai_kartu("Rincian")
-    tampil = pivot[["aplikasi", "Positif", "Negatif", "Total", "Pos_pct"]].copy()
-    tampil.columns = ["Aplikasi", "Positif", "Negatif", "Total", "% Positif"]
-    tampil["Positif"] = tampil["Positif"].astype(int).map(lambda v: f"{v:,}".replace(",", "."))
-    tampil["Negatif"] = tampil["Negatif"].astype(int).map(lambda v: f"{v:,}".replace(",", "."))
-    tampil["Total"] = tampil["Total"].astype(int).map(lambda v: f"{v:,}".replace(",", "."))
-    tampil["% Positif"] = tampil["% Positif"].map(lambda v: f"{v:.1f}%".replace(".", ","))
-    st.table(tampil)
-    tutup_kartu()
+    with col_b:
+        with kartu("Tren Jumlah Ulasan per Bulan"):
+            tren = sentimen_bulanan(aplikasi, dari, sampai, tahun, model)
+            if tren.empty:
+                st.caption("Tidak ada data untuk filter ini.")
+            else:
+                fig = go.Figure()
+                for app in sorted(tren["aplikasi"].unique()):
+                    warna = warna_aplikasi(app)
+                    pos_s = tren[(tren["aplikasi"] == app) & (tren["label"] == "Positif")].sort_values("bulan")
+                    neg_s = tren[(tren["aplikasi"] == app) & (tren["label"] == "Negatif")].sort_values("bulan")
+                    fig.add_trace(go.Scatter(
+                        x=pos_s["bulan"], y=pos_s["jumlah"], mode="lines+markers",
+                        name=app, legendgroup=app,
+                        line=dict(color=warna, width=2.8, shape="spline", smoothing=0.8),
+                        marker=dict(size=8, color=warna, line=dict(color="white", width=1.5)),
+                        hovertemplate=f"<b>{app}</b> · Positif<br>%{{x|%b %Y}}<br>%{{y:,}} ulasan<extra></extra>",
+                    ))
+                    fig.add_trace(go.Scatter(
+                        x=neg_s["bulan"], y=neg_s["jumlah"], mode="lines+markers",
+                        name=app, legendgroup=app, showlegend=False,
+                        line=dict(color=warna, width=2.2, dash="dash", shape="spline", smoothing=0.8),
+                        marker=dict(size=8, color="white", line=dict(color=warna, width=2)),
+                        hovertemplate=f"<b>{app}</b> · Negatif<br>%{{x|%b %Y}}<br>%{{y:,}} ulasan<extra></extra>",
+                    ))
+                fig.add_trace(go.Scatter(
+                    x=[None], y=[None], mode="markers",
+                    marker=dict(size=10, color="#334155", line=dict(color="white", width=1.5)),
+                    name="Positif", legendgroup="legend_sym",
+                ))
+                fig.add_trace(go.Scatter(
+                    x=[None], y=[None], mode="markers",
+                    marker=dict(size=10, color="white", line=dict(color="#334155", width=2)),
+                    name="Negatif", legendgroup="legend_sym",
+                ))
+                fig.update_layout(
+                    xaxis=dict(
+                        title="",
+                        tickfont=dict(size=10, family="Inter", color="#475569"),
+                        showgrid=True, gridcolor="#F1F5F9",
+                        tickformat="%b %Y",
+                        dtick="M1",
+                        tickangle=-45,
+                        showline=True, linecolor="#CBD5E1",
+                    ),
+                    yaxis=dict(title="", tickfont=dict(size=11, family="Inter", color="#475569"), showgrid=True, gridcolor="#F1F5F9",
+                               tickformat=",d", separatethousands=True),
+                    height=460, margin=dict(l=10, r=10, t=10, b=150),
+                    legend=dict(orientation="h", yanchor="bottom", y=-0.48, xanchor="center", x=0.5, font=dict(size=11, family="Inter")),
+                    paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+                    hovermode="x unified",
+                )
+                st.plotly_chart(fig, use_container_width=True)
+
+    with kartu("Rincian"):
+        tampil = pivot[["aplikasi", "Positif", "Negatif", "Total", "Pos_pct"]].copy()
+        tampil.columns = ["Aplikasi", "Positif", "Negatif", "Total", "% Positif"]
+        tampil["Positif"] = tampil["Positif"].astype(int).map(lambda v: f"{v:,}".replace(",", "."))
+        tampil["Negatif"] = tampil["Negatif"].astype(int).map(lambda v: f"{v:,}".replace(",", "."))
+        tampil["Total"] = tampil["Total"].astype(int).map(lambda v: f"{v:,}".replace(",", "."))
+        tampil["% Positif"] = tampil["% Positif"].map(lambda v: f"{v:.1f}%".replace(".", ","))
+        st.table(tampil)
 
 
 # ---------------------------------------------------------------------------
@@ -1055,83 +1099,80 @@ def tampilkan_performa_app(app: str, perf: pd.DataFrame, df_metrik: pd.DataFrame
     model_terbaik = sub.sort_values("macro_f1", ascending=False).iloc[0]["model"]
 
     # Tabel metrik
-    mulai_kartu(f"Metrik Evaluasi — {app}")
-    header = (
-        '<tr style="background:#F1F5F9;">'
-        '<th style="padding:0.6rem 0.8rem; text-align:left; font-size:0.72rem; text-transform:uppercase; letter-spacing:0.3px; color:#0A3B5E;">Algoritma</th>'
-        + _th_cell("Accuracy") + _th_cell("Precision") + _th_cell("Recall")
-        + _th_cell("F1") + _th_cell("Macro-F1") + _th_cell("Waktu (dtk)")
-        + '</tr>'
-    )
-    baris = []
-    for _, r in sub.iterrows():
-        terbaik = r["model"] == model_terbaik
-        bg = "#ECFDF5" if terbaik else "transparent"
-        warna = "#064E3B" if terbaik else "#334155"
-        tebal = "font-weight:600;" if terbaik else ""
-        bintang = ' <span style="color:#F59E0B; font-size:1rem;">★</span>' if terbaik else ""
-        acc_s = ("%.4f" % r["accuracy"]).replace(".", ",")
-        prec_s = ("%.4f" % r["precision_pos"]).replace(".", ",")
-        rec_s = ("%.4f" % r["recall_pos"]).replace(".", ",")
-        f1_s = ("%.4f" % r["f1_pos"]).replace(".", ",")
-        mf1_s = ("%.4f" % r["macro_f1"]).replace(".", ",")
-        wl_s = str(r["waktu_latih"]).replace(".", ",") if pd.notna(r["waktu_latih"]) else "-"
-        baris.append(
-            f'<tr style="background:{bg}; color:{warna}; {tebal}">'
-            f'<td style="padding:0.6rem 0.8rem; border-top:1px solid #E2E8F0;">{r["model"]}{bintang}</td>'
-            f'<td style="padding:0.6rem 0.8rem; border-top:1px solid #E2E8F0; text-align:right;">{acc_s}</td>'
-            f'<td style="padding:0.6rem 0.8rem; border-top:1px solid #E2E8F0; text-align:right;">{prec_s}</td>'
-            f'<td style="padding:0.6rem 0.8rem; border-top:1px solid #E2E8F0; text-align:right;">{rec_s}</td>'
-            f'<td style="padding:0.6rem 0.8rem; border-top:1px solid #E2E8F0; text-align:right;">{f1_s}</td>'
-            f'<td style="padding:0.6rem 0.8rem; border-top:1px solid #E2E8F0; text-align:right;">{mf1_s}</td>'
-            f'<td style="padding:0.6rem 0.8rem; border-top:1px solid #E2E8F0; text-align:right;">{wl_s}</td>'
-            '</tr>'
+    with kartu(f"Metrik Evaluasi — {app}"):
+        header = (
+            '<tr style="background:#F1F5F9;">'
+            '<th style="padding:0.6rem 0.8rem; text-align:left; font-size:0.72rem; text-transform:uppercase; letter-spacing:0.3px; color:#0A3B5E;">Algoritma</th>'
+            + _th_cell("Accuracy") + _th_cell("Precision") + _th_cell("Recall")
+            + _th_cell("F1") + _th_cell("Macro-F1") + _th_cell("Waktu (dtk)")
+            + '</tr>'
         )
-    st.markdown(
-        '<table style="width:100%; border-collapse:collapse; font-size:0.85rem; font-family:Inter;">'
-        f'<thead>{header}</thead><tbody>{"".join(baris)}</tbody></table>',
-        unsafe_allow_html=True,
-    )
-    tutup_kartu()
+        baris = []
+        for _, r in sub.iterrows():
+            terbaik = r["model"] == model_terbaik
+            bg = "#ECFDF5" if terbaik else "transparent"
+            warna = "#064E3B" if terbaik else "#334155"
+            tebal = "font-weight:600;" if terbaik else ""
+            bintang = ' <span style="color:#F59E0B; font-size:1rem;">★</span>' if terbaik else ""
+            acc_s = ("%.4f" % r["accuracy"]).replace(".", ",")
+            prec_s = ("%.4f" % r["precision_pos"]).replace(".", ",")
+            rec_s = ("%.4f" % r["recall_pos"]).replace(".", ",")
+            f1_s = ("%.4f" % r["f1_pos"]).replace(".", ",")
+            mf1_s = ("%.4f" % r["macro_f1"]).replace(".", ",")
+            wl_s = str(r["waktu_latih"]).replace(".", ",") if pd.notna(r["waktu_latih"]) else "-"
+            baris.append(
+                f'<tr style="background:{bg}; color:{warna}; {tebal}">'
+                f'<td style="padding:0.6rem 0.8rem; border-top:1px solid #E2E8F0;">{r["model"]}{bintang}</td>'
+                f'<td style="padding:0.6rem 0.8rem; border-top:1px solid #E2E8F0; text-align:right;">{acc_s}</td>'
+                f'<td style="padding:0.6rem 0.8rem; border-top:1px solid #E2E8F0; text-align:right;">{prec_s}</td>'
+                f'<td style="padding:0.6rem 0.8rem; border-top:1px solid #E2E8F0; text-align:right;">{rec_s}</td>'
+                f'<td style="padding:0.6rem 0.8rem; border-top:1px solid #E2E8F0; text-align:right;">{f1_s}</td>'
+                f'<td style="padding:0.6rem 0.8rem; border-top:1px solid #E2E8F0; text-align:right;">{mf1_s}</td>'
+                f'<td style="padding:0.6rem 0.8rem; border-top:1px solid #E2E8F0; text-align:right;">{wl_s}</td>'
+                '</tr>'
+            )
+        st.markdown(
+            '<table style="width:100%; border-collapse:collapse; font-size:0.85rem; font-family:Inter;">'
+            f'<thead>{header}</thead><tbody>{"".join(baris)}</tbody></table>',
+            unsafe_allow_html=True,
+        )
 
     # Confusion matrix 2 model side by side (ukuran kecil)
-    mulai_kartu(f"Confusion Matrix — {app}")
-    sub_met = df_metrik[df_metrik["aplikasi"] == app]
-    model_list = sorted(sub_met["model"].unique())
-    cols = st.columns([1, 1, 0.3])
-    for idx, model_nama in enumerate(model_list[:2]):
-        sub_mm = sub_met[sub_met["model"] == model_nama]
-        cm = {(a, p): int(n) for a, p, n in zip(sub_mm["aktual"], sub_mm["prediksi"], sub_mm["n"])}
-        tp = cm.get(("Positif", "Positif"), 0); fn = cm.get(("Positif", "Negatif"), 0)
-        fp = cm.get(("Negatif", "Positif"), 0); tn = cm.get(("Negatif", "Negatif"), 0)
-        total = tp + fn + fp + tn
-        acc = ((tp + tn) / total * 100) if total else 0.0
-        with cols[idx]:
-            st.markdown(render_cm_mini(tp, fn, fp, tn, model_nama, acc), unsafe_allow_html=True)
-    st.caption("Sel hijau: prediksi benar (TP/TN). Sel biru: prediksi salah (FN/FP).")
-    tutup_kartu()
+    with kartu(f"Confusion Matrix — {app}"):
+        sub_met = df_metrik[df_metrik["aplikasi"] == app]
+        model_list = sorted(sub_met["model"].unique())
+        cols = st.columns([1, 1, 0.3])
+        for idx, model_nama in enumerate(model_list[:2]):
+            sub_mm = sub_met[sub_met["model"] == model_nama]
+            cm = {(a, p): int(n) for a, p, n in zip(sub_mm["aktual"], sub_mm["prediksi"], sub_mm["n"])}
+            tp = cm.get(("Positif", "Positif"), 0); fn = cm.get(("Positif", "Negatif"), 0)
+            fp = cm.get(("Negatif", "Positif"), 0); tn = cm.get(("Negatif", "Negatif"), 0)
+            total = tp + fn + fp + tn
+            acc = ((tp + tn) / total * 100) if total else 0.0
+            with cols[idx]:
+                st.markdown(render_cm_mini(tp, fn, fp, tn, model_nama, acc), unsafe_allow_html=True)
+        st.caption("Sel hijau: prediksi benar (TP/TN). Sel biru: prediksi salah (FN/FP).")
 
     # Grafik macro-F1 khusus aplikasi ini
-    mulai_kartu(f"Perbandingan Macro-F1 — {app}")
-    fig = go.Figure()
-    for _, r in sub.iterrows():
-        warna_bar = HD_DARK if "svm" in r["model"].lower() else "#93C5FD"
-        label = f"{r['macro_f1']:.4f}".replace(".", ",")
-        fig.add_trace(go.Bar(
-            x=[r["model"]], y=[r["macro_f1"]],
-            marker_color=warna_bar, text=label, textposition="outside",
-            textfont=dict(size=12, family="Inter", color="#0A3B5E"),
-            showlegend=False,
-        ))
-    fig.update_layout(
-        xaxis=dict(title="", tickfont=dict(size=12, family="Inter")),
-        yaxis=dict(range=[0, 1.1], title="Macro-F1", tickfont=dict(size=11, family="Inter"),
-                   showgrid=True, gridcolor="#F1F5F9"),
-        height=280, margin=dict(l=10, r=10, t=10, b=10),
-        paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-    )
-    st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
-    tutup_kartu()
+    with kartu(f"Perbandingan Macro-F1 — {app}"):
+        fig = go.Figure()
+        for _, r in sub.iterrows():
+            warna_bar = HD_DARK if "svm" in r["model"].lower() else "#93C5FD"
+            label = f"{r['macro_f1']:.4f}".replace(".", ",")
+            fig.add_trace(go.Bar(
+                x=[r["model"]], y=[r["macro_f1"]],
+                marker_color=warna_bar, text=label, textposition="outside",
+                textfont=dict(size=12, family="Inter", color="#0A3B5E"),
+                showlegend=False,
+            ))
+        fig.update_layout(
+            xaxis=dict(title="", tickfont=dict(size=12, family="Inter")),
+            yaxis=dict(range=[0, 1.1], title="Macro-F1", tickfont=dict(size=11, family="Inter"),
+                       showgrid=True, gridcolor="#F1F5F9"),
+            height=280, margin=dict(l=10, r=10, t=10, b=10),
+            paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+        )
+        st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
 
     # Rekomendasi
     tb = sub.sort_values("macro_f1", ascending=False).iloc[0]
@@ -1174,80 +1215,77 @@ def halaman_admin(user: dict) -> None:
     page_title("Halaman Admin", "Unggah data ulasan baru dan kelola pengguna")
     data = ringkasan_global()
 
-    mulai_kartu("Unggah Data Ulasan Baru")
-    st.caption("Unggah ulasan mentah hasil scraping (kolom wajib: content, score, at). Sistem memproses otomatis: preprocessing, pelabelan hybrid, dan prediksi dua model. Hanya ulasan yang tanggalnya setelah data terakhir aplikasi tersebut yang dimuat, maksimal 2.000 ulasan per unggahan.")
-    c1, c2 = st.columns([1, 2])
-    with c1: aplikasi = st.selectbox("Aplikasi target", data["aplikasi"], key="admin_app")
-    with c2: berkas = st.file_uploader("Berkas ulasan (.csv atau .xlsx)", type=["csv", "xlsx"], key="admin_file")
-    if st.button("Unggah dan proses", type="primary", disabled=berkas is None):
-        proses_unggahan(user, aplikasi, berkas)
-        ringkasan_global.clear()
-        riwayat_unggahan.clear()
-        st.rerun()
-    tutup_kartu()
+    with kartu("Unggah Data Ulasan Baru"):
+        st.caption("Unggah ulasan mentah hasil scraping (kolom wajib: content, score, at). Sistem memproses otomatis: preprocessing, pelabelan hybrid, dan prediksi dua model. Hanya ulasan yang tanggalnya setelah data terakhir aplikasi tersebut yang dimuat, maksimal 2.000 ulasan per unggahan.")
+        c1, c2 = st.columns([1, 2])
+        with c1: aplikasi = st.selectbox("Aplikasi target", data["aplikasi"], key="admin_app")
+        with c2: berkas = st.file_uploader("Berkas ulasan (.csv atau .xlsx)", type=["csv", "xlsx"], key="admin_file")
+        if st.button("Unggah dan proses", type="primary", disabled=berkas is None):
+            proses_unggahan(user, aplikasi, berkas)
+            ringkasan_global.clear()
+            riwayat_unggahan.clear()
+            st.rerun()
 
-    mulai_kartu("Riwayat Unggahan")
-    riwayat = riwayat_unggahan()
-    if riwayat.empty:
-        st.info("Belum ada unggahan.")
-    else:
-        tampil = pd.DataFrame({
-            "ID": riwayat["id"].astype(int),
-            "Waktu": riwayat["waktu"].apply(lambda t: t.strftime("%d %b %Y %H:%M") if pd.notna(t) else "-"),
-            "Pengguna": riwayat["username"],
-            "Aplikasi": riwayat["aplikasi"],
-            "Berkas": riwayat["berkas"].fillna("-"),
-            "Baris": riwayat["jumlah_baris"].fillna(0).astype(int),
-            "Status": riwayat["status"],
-            "Catatan": riwayat["catatan"].fillna("-"),
-        })
-        st.table(tampil)
-    tutup_kartu()
+    with kartu("Riwayat Unggahan"):
+        riwayat = riwayat_unggahan()
+        if riwayat.empty:
+            st.info("Belum ada unggahan.")
+        else:
+            tampil = pd.DataFrame({
+                "ID": riwayat["id"].astype(int),
+                "Waktu": riwayat["waktu"].apply(lambda t: t.strftime("%d %b %Y %H:%M") if pd.notna(t) else "-"),
+                "Pengguna": riwayat["username"],
+                "Aplikasi": riwayat["aplikasi"],
+                "Berkas": riwayat["berkas"].fillna("-"),
+                "Baris": riwayat["jumlah_baris"].fillna(0).astype(int),
+                "Status": riwayat["status"],
+                "Catatan": riwayat["catatan"].fillna("-"),
+            })
+            st.table(tampil)
 
-    mulai_kartu("Kelola Pengguna")
-    pengguna = daftar_pengguna()
-    if not pengguna.empty:
-        tampil = pengguna.rename(columns={"id": "ID", "username": "Username", "peran": "Peran"})
-        st.table(tampil)
-    tab1, tab2, tab3 = st.tabs(["Tambah akun", "Ubah password / peran", "Hapus akun"])
-    with tab1:
-        with st.form("tambah_akun_form", clear_on_submit=True):
-            u = st.text_input("Username", key="tm_u")
-            p = st.text_input("Password", type="password", key="tm_p")
-            r = st.selectbox("Peran", ["Pengguna", "Admin"], key="tm_r")
-            submit = st.form_submit_button("Tambah", type="primary")
-        if submit:
-            ok, pesan = tambah_akun(u, p, r)
-            if ok:
-                st.success(pesan); daftar_pengguna.clear(); st.rerun()
-            else: st.error(pesan)
-    with tab2:
+    with kartu("Kelola Pengguna"):
+        pengguna = daftar_pengguna()
         if not pengguna.empty:
-            pilih = st.selectbox("Pilih pengguna", pengguna["username"].tolist(), key="ub_pilih")
-            with st.form("ubah_akun_form", clear_on_submit=True):
-                p_baru = st.text_input("Password baru (kosongkan jika tidak diubah)", type="password", key="ub_p")
-                r_baru = st.selectbox("Peran baru (kosongkan jika tidak diubah)", ["", "Pengguna", "Admin"], key="ub_r")
-                submit = st.form_submit_button("Ubah", type="primary")
+            tampil = pengguna.rename(columns={"id": "ID", "username": "Username", "peran": "Peran"})
+            st.table(tampil)
+        tab1, tab2, tab3 = st.tabs(["Tambah akun", "Ubah password / peran", "Hapus akun"])
+        with tab1:
+            with st.form("tambah_akun_form", clear_on_submit=True):
+                u = st.text_input("Username", key="tm_u")
+                p = st.text_input("Password", type="password", key="tm_p")
+                r = st.selectbox("Peran", ["Pengguna", "Admin"], key="tm_r")
+                submit = st.form_submit_button("Tambah", type="primary")
             if submit:
-                id_user = int(pengguna[pengguna["username"] == pilih]["id"].iloc[0])
-                ok, pesan = ubah_akun(id_user, p_baru, r_baru)
+                ok, pesan = tambah_akun(u, p, r)
                 if ok:
                     st.success(pesan); daftar_pengguna.clear(); st.rerun()
                 else: st.error(pesan)
-    with tab3:
-        if not pengguna.empty:
-            lain = pengguna[pengguna["username"] != user["username"]]["username"].tolist()
-            if lain:
-                pilih = st.selectbox("Pilih pengguna yang akan dihapus", lain, key="hp_pilih")
-                if st.button("Hapus akun", type="primary", key="hp_btn"):
+        with tab2:
+            if not pengguna.empty:
+                pilih = st.selectbox("Pilih pengguna", pengguna["username"].tolist(), key="ub_pilih")
+                with st.form("ubah_akun_form", clear_on_submit=True):
+                    p_baru = st.text_input("Password baru (kosongkan jika tidak diubah)", type="password", key="ub_p")
+                    r_baru = st.selectbox("Peran baru (kosongkan jika tidak diubah)", ["", "Pengguna", "Admin"], key="ub_r")
+                    submit = st.form_submit_button("Ubah", type="primary")
+                if submit:
                     id_user = int(pengguna[pengguna["username"] == pilih]["id"].iloc[0])
-                    ok, pesan = hapus_akun(id_user)
+                    ok, pesan = ubah_akun(id_user, p_baru, r_baru)
                     if ok:
                         st.success(pesan); daftar_pengguna.clear(); st.rerun()
                     else: st.error(pesan)
-            else:
-                st.info("Tidak ada pengguna lain untuk dihapus.")
-    tutup_kartu()
+        with tab3:
+            if not pengguna.empty:
+                lain = pengguna[pengguna["username"] != user["username"]]["username"].tolist()
+                if lain:
+                    pilih = st.selectbox("Pilih pengguna yang akan dihapus", lain, key="hp_pilih")
+                    if st.button("Hapus akun", type="primary", key="hp_btn"):
+                        id_user = int(pengguna[pengguna["username"] == pilih]["id"].iloc[0])
+                        ok, pesan = hapus_akun(id_user)
+                        if ok:
+                            st.success(pesan); daftar_pengguna.clear(); st.rerun()
+                        else: st.error(pesan)
+                else:
+                    st.info("Tidak ada pengguna lain untuk dihapus.")
 
 
 def proses_unggahan(user: dict, aplikasi: str, berkas) -> None:
