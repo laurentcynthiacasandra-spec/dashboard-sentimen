@@ -54,8 +54,7 @@ st.markdown(
     """
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
-    @import url('https://fonts.googleapis.com/icon?family=Material+Icons');
-    @import url('https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0');
+    @import url('https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined');
 
     html, body, [data-testid="stAppViewContainer"] * {
         font-family: 'Inter', -apple-system, sans-serif !important;
@@ -264,34 +263,21 @@ st.markdown(
         transform: translateY(-1px);
     }
 
-    /* Password visibility toggle → ikon mata SVG, sembunyikan teks "visibility" */
+    /* Password visibility toggle → ikon mata SVG inline, teks disembunyikan */
     [data-testid="stPasswordVisibilityToggleButton"] {
-        padding: 0 0.3rem !important;
-        min-width: 32px !important;
+        padding: 0 !important;
+        min-width: 36px !important;
+        width: 36px !important;
+        height: 36px !important;
+        font-size: 0 !important;
+        color: transparent !important;
+        background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='22' height='22' viewBox='0 0 24 24' fill='none' stroke='%2364748B' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z'/><circle cx='12' cy='12' r='3'/></svg>") !important;
+        background-repeat: no-repeat !important;
+        background-position: center !important;
+        background-size: 22px 22px !important;
     }
-    [data-testid="stPasswordVisibilityToggleButton"] svg {
-        display: block !important;
-        width: 20px; height: 20px;
-    }
-    [data-testid="stPasswordVisibilityToggleButton"] span,
-    [data-testid="stPasswordVisibilityToggleButton"] p,
-    button[kind="headerNoPadding"][aria-label*="visibility"] span,
-    button[kind="headerNoPadding"][aria-label*="password"] span {
-        font-family: 'Material Icons', 'Material Symbols Outlined' !important;
-        font-size: 20px !important;
-        font-weight: normal !important;
-        font-style: normal !important;
-        line-height: 1 !important;
-        letter-spacing: normal !important;
-        text-transform: none !important;
-        white-space: nowrap !important;
-        word-wrap: normal !important;
-        -webkit-font-feature-settings: 'liga' !important;
-        -webkit-font-smoothing: antialiased !important;
-        font-feature-settings: 'liga' !important;
-        color: #64748B !important;
-        overflow: hidden !important;
-        max-width: 24px !important;
+    [data-testid="stPasswordVisibilityToggleButton"] * {
+        display: none !important;
     }
 
     /* Input & selectbox modern */
