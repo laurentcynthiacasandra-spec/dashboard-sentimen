@@ -568,10 +568,28 @@ def rentang_tanggal(aplikasi: str) -> tuple:
     return df.iloc[0]["mn"], df.iloc[0]["mx"]
 
 
+def _id_model_untuk(nama_model: str):
+    """None kalau 'Semua algoritma', atau id_model spesifik."""
+    if not nama_model or nama_model == "Semua algoritma":
+        return None
+    df = kueri("SELECT id_model FROM dim_model WHERE nama_model = %s LIMIT 1", (nama_model,))
+    if df.empty: return None
+    return int(df.iloc[0]["id_model"])
+
+
 @st.cache_data(ttl=300, show_spinner=False)
-def sentimen_bulanan(aplikasi: str, dari, sampai, tahun) -> pd.DataFrame:
-    """Jumlah ulasan per bulan per aplikasi per sentimen."""
-    idm = model_utama_id()
+def sentimen_bulanan(aplikasi: str, dari, sampai, tahun, nama_model: str = "Semua algoritma") -> pd.DataFrame:
+    """Jumlah ulasan per bulan per aplikasi per sentimen.
+    Jika nama_model=Semua algoritma -> pakai label pelabelan (id_sentimen) dari model utama.
+    Jika nama_model spesifik -> pakai hasil prediksi (id_sentimen_prediksi) dari model itu.
+    """
+    id_pilih = _id_model_untuk(nama_model)
+    if id_pilih is None:
+        idm = model_utama_id()
+        kolom_sentimen = "f.id_sentimen"
+    else:
+        idm = id_pilih
+        kolom_sentimen = "f.id_sentimen_prediksi"
     cond = []
     parm = [idm]
     if aplikasi != "Semua" and aplikasi != "Semua aplikasi":
@@ -588,7 +606,7 @@ def sentimen_bulanan(aplikasi: str, dari, sampai, tahun) -> pd.DataFrame:
                COUNT(*) AS jumlah
         FROM fact_sentimen f
         JOIN dim_aplikasi a ON a.id_aplikasi = f.id_aplikasi
-        JOIN dim_sentimen s ON s.id_sentimen = f.id_sentimen
+        JOIN dim_sentimen s ON s.id_sentimen = {kolom_sentimen}
         JOIN dim_waktu w ON w.id_waktu = f.id_waktu
         WHERE f.id_model = %s {wh}
         GROUP BY a.nama_aplikasi, DATE_TRUNC('month', w.tanggal), s.label_sentimen
@@ -601,8 +619,14 @@ def sentimen_bulanan(aplikasi: str, dari, sampai, tahun) -> pd.DataFrame:
 
 
 @st.cache_data(ttl=300, show_spinner=False)
-def sentimen_tersaring(aplikasi: str, dari, sampai, tahun) -> pd.DataFrame:
-    idm = model_utama_id()
+def sentimen_tersaring(aplikasi: str, dari, sampai, tahun, nama_model: str = "Semua algoritma") -> pd.DataFrame:
+    id_pilih = _id_model_untuk(nama_model)
+    if id_pilih is None:
+        idm = model_utama_id()
+        kolom_sentimen = "f.id_sentimen"
+    else:
+        idm = id_pilih
+        kolom_sentimen = "f.id_sentimen_prediksi"
     cond = []
     parm = [idm]
     if aplikasi != "Semua" and aplikasi != "Semua aplikasi":
@@ -616,7 +640,7 @@ def sentimen_tersaring(aplikasi: str, dari, sampai, tahun) -> pd.DataFrame:
         SELECT a.nama_aplikasi AS aplikasi, s.label_sentimen AS label, COUNT(*) AS jumlah
         FROM fact_sentimen f
         JOIN dim_aplikasi a ON a.id_aplikasi = f.id_aplikasi
-        JOIN dim_sentimen s ON s.id_sentimen = f.id_sentimen
+        JOIN dim_sentimen s ON s.id_sentimen = {kolom_sentimen}
         JOIN dim_waktu w ON w.id_waktu = f.id_waktu
         WHERE f.id_model = %s {wh}
         GROUP BY a.nama_aplikasi, s.label_sentimen
@@ -844,7 +868,7 @@ def halaman_sentimen() -> None:
         st.error("Tanggal 'Dari' tidak boleh lebih besar dari 'Sampai'.")
         return
 
-    df = sentimen_tersaring(aplikasi, dari, sampai, tahun)
+    df = sentimen_tersaring(aplikasi, dari, sampai, tahun, model)
     if df.empty:
         st.warning("Tidak ada ulasan pada filter ini.")
         return
@@ -861,8 +885,13 @@ def halaman_sentimen() -> None:
         trd = pivot.sort_values("Pos_pct", ascending=True).iloc[0]
         selisih = tgi["Pos_pct"] - trd["Pos_pct"]
         periode = f"tahun {tahun}" if tahun != "Semua tahun" else "seluruh periode"
+        sumber_teks = (
+            "hasil pelabelan (semua ulasan)"
+            if model == "Semua algoritma"
+            else f"prediksi algoritma {model}"
+        )
         banner_insight(
-            f"<b>Pada {periode}</b>, sentimen positif tertinggi ada pada "
+            f"<b>Pada {periode}</b> berdasarkan <b>{sumber_teks}</b>, sentimen positif tertinggi ada pada "
             f"<b>{tgi['aplikasi']}</b> ({str(tgi['Pos_pct']).replace('.', ',')}%), "
             f"sedangkan terendah <b>{trd['aplikasi']}</b> ({str(trd['Pos_pct']).replace('.', ',')}%). "
             f"Selisih {str(round(selisih, 1)).replace('.', ',')} poin."
@@ -892,7 +921,7 @@ def halaman_sentimen() -> None:
 
     with col_b:
         mulai_kartu("Tren Jumlah Ulasan per Bulan")
-        tren = sentimen_bulanan(aplikasi, dari, sampai, tahun)
+        tren = sentimen_bulanan(aplikasi, dari, sampai, tahun, model)
         if tren.empty:
             st.caption("Tidak ada data untuk filter ini.")
         else:
