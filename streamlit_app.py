@@ -1,416 +1,722 @@
-import os, re, time, datetime
+import os
+import io
+from datetime import date, datetime
+
+import bcrypt
 import pandas as pd
-import altair as alt
+import plotly.express as px
+import plotly.graph_objects as go
+import psycopg2
+import psycopg2.extras
 import streamlit as st
 
-st.set_page_config(page_title="Dashboard Analisis Sentimen", page_icon="📊", layout="wide")
+# ---------------------------------------------------------------------------
+# Konfigurasi halaman dan tema
+# ---------------------------------------------------------------------------
+st.set_page_config(
+    page_title="Analisis Sentimen Instagram, TikTok, dan X",
+    page_icon="📊",
+    layout="wide",
+    initial_sidebar_state="collapsed",
+)
 
-# --- koneksi: DATABASE_URL dari Secrets (cloud) atau variabel lingkungan (lokal)
-try:
-    if "DATABASE_URL" in st.secrets: os.environ["DATABASE_URL"] = st.secrets["DATABASE_URL"]
-except Exception:
-    pass
-from sqlalchemy import select, func, insert, update, delete, and_
-from werkzeug.security import check_password_hash, generate_password_hash
-import db
-import pipeline
+HD = "#175A85"
+POS = "#3F8A1E"
+NEG = "#D94545"
+BG = "#EFEAE8"
 
-da, dw, dm, fs, fe, rl, us, rp = db.dim_aplikasi, db.dim_waktu, db.dim_model, db.fact_sentimen, db.fact_evaluasi, db.ringkasan_label, db.users, db.riwayat_pelatihan
-APPCOL = {"Instagram": "#8e44ad", "TikTok": "#16a085", "X": "#34495e"}
-POS, NEG = "#2e7d32", "#c62828"
-ROLES = ("Admin", "Pengguna")
-UPLOAD_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "uploads")
+st.markdown(
+    f"""
+    <style>
+    .main .block-container {{max-width: 1100px; padding-top: 1rem; padding-bottom: 2rem;}}
+    .stTabs [data-baseweb="tab-list"] {{gap: 4px;}}
+    .stTabs [data-baseweb="tab"] {{background: {BG}; border-radius: 8px 8px 0 0;}}
+    .stTabs [aria-selected="true"] {{background: {HD}; color: white;}}
+    .metric-card {{background: white; padding: 1rem; border-radius: 8px; border: 1px solid #ddd;}}
+    .metric-label {{color: #666; font-size: 0.85rem; text-transform: uppercase;}}
+    .metric-value {{font-size: 2rem; font-weight: bold; color: {HD};}}
+    .metric-sub {{color: #666; font-size: 0.9rem;}}
+    header {{visibility: hidden;}}
+    footer {{visibility: hidden;}}
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
 
-st.markdown("""<style>
-.block-container{padding-top:1.4rem}
-div[data-testid="stMetric"]{background:#fff;border:1px solid #e2e8f0;border-left:4px solid #e67e22;border-radius:12px;padding:12px 16px}
-div[data-testid="stMetric"] *{color:#0f172a !important}
-.kartu{color:#0f172a;background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:14px 18px;box-shadow:0 1px 3px rgba(15,23,42,.06)}
-.kartu h4{margin:0 0 4px 0}.kartu .pct{font-size:2rem;font-weight:700}.kartu small{color:#64748b}
-.meter{display:flex;height:10px;border-radius:6px;overflow:hidden;margin:8px 0}.meter i{display:block}
-.hl{color:#0f172a;background:#fff4e5;border:1px solid #f5d3a6;border-radius:10px;padding:10px 14px;margin:6px 0 14px 0}
-</style>""", unsafe_allow_html=True)
 
-fmt = lambda n: f"{int(n):,}".replace(",", ".")
-
-# ---------------------------------------------------------------- data (di-cache sebentar agar ringan)
-@st.cache_data(ttl=120, show_spinner=False)
-def meta():
-    with db.engine.connect() as c:
-        apps = [(r.id_aplikasi, r.nama_aplikasi) for r in c.execute(select(da).order_by(da.c.id_aplikasi))]
-        models = [(r.id_model, r.nama_model) for r in c.execute(select(dm).order_by(dm.c.id_model))]
-        mn, mx = c.execute(select(func.min(dw.c.tanggal), func.max(dw.c.tanggal))).first()
-        tahun = sorted(r[0] for r in c.execute(select(dw.c.tahun).distinct()))
-    return dict(apps=apps, models=models, mn=mn, mx=mx, tahun=tahun)
-
-@st.cache_data(ttl=120, show_spinner=False)
-def data_ringkasan():
-    with db.engine.connect() as c:
-        apps = {r.id_aplikasi: r.nama_aplikasi for r in c.execute(select(da))}
-        rows = c.execute(select(rl)).all()
-        per = [dict(aplikasi=apps[r.id_aplikasi], positif=r.positif, negatif=r.negatif, total=r.data_dipakai,
-                    persen=round(r.positif / r.data_dipakai * 100, 1), sejalan=r.sejalan_persen) for r in rows]
-        best = [dict(aplikasi=apps[r.id_aplikasi], model=r.nama_model, f1=round(r.macro_f1, 4)) for r in
-                c.execute(select(fe, dm.c.nama_model).join(dm, dm.c.id_model == fe.c.id_model).where(fe.c.terbaik == True))]  # noqa
-        mx = c.execute(select(func.max(dw.c.tanggal))).scalar()
-    return per, best, mx
-
-@st.cache_data(ttl=120, show_spinner=False)
-def data_sentimen(app_id, dari, sampai, sumber, model_id):
-    kolom = fs.c.id_sentimen if sumber == "aktual" else fs.c.id_sentimen_prediksi
-    cond = [fs.c.id_model == model_id]
-    if dari: cond.append(dw.c.tanggal >= dari)
-    if sampai: cond.append(dw.c.tanggal <= sampai)
-    if sumber == "prediksi": cond.append(fs.c.data_uji == True)  # noqa
-    if app_id: cond.append(fs.c.id_aplikasi == app_id)
-    with db.engine.connect() as c:
-        apps = {r.id_aplikasi: r.nama_aplikasi for r in c.execute(select(da))}
-        q = (select(fs.c.id_aplikasi, dw.c.tahun, dw.c.bulan, kolom.label("s"), func.count().label("n"))
-             .join(dw, dw.c.id_waktu == fs.c.id_waktu).where(and_(*cond)).group_by(fs.c.id_aplikasi, dw.c.tahun, dw.c.bulan, kolom))
-        rows = [(apps[r.id_aplikasi], r.tahun, r.bulan, "Positif" if r.s == 1 else "Negatif", r.n) for r in c.execute(q)]
-    return pd.DataFrame(rows, columns=["aplikasi", "tahun", "bulan", "sentimen", "n"])
-
-@st.cache_data(ttl=120, show_spinner=False)
-def data_performa():
-    with db.engine.connect() as c:
-        apps = {r.id_aplikasi: r.nama_aplikasi for r in c.execute(select(da))}
-        q = select(fe, dm.c.nama_model).join(dm, dm.c.id_model == fe.c.id_model).order_by(fe.c.id_aplikasi, fe.c.id_model)
-        rows = [dict(Aplikasi=apps[r.id_aplikasi], Algoritma=r.nama_model, Accuracy=r.accuracy, Precision=r.precision_pos, Recall=r.recall_pos,
-                     F1=r.f1_pos, MacroF1=r.macro_f1, Waktu=r.waktu_latih, Terbaik=bool(r.terbaik), tp=r.tp, fn=r.fn, fp=r.fp, tn=r.tn) for r in c.execute(q)]
-    return pd.DataFrame(rows)
-
-# ---------------------------------------------------------------- autentikasi
-@st.cache_resource
-def gagal_login(): return {}          # (username) -> [jumlah, waktu pertama]; pembatas tebak-tebakan password
-BATAS, JEDA = 5, 300
-
-def terkunci(u):
-    g = gagal_login().get(u.lower())
-    if not g: return 0
-    sisa = JEDA - (time.time() - g[1])
-    if sisa <= 0: gagal_login().pop(u.lower(), None); return 0
-    return int(sisa) + 1 if g[0] >= BATAS else 0
-
-def masuk(u, p):
-    sisa = terkunci(u)
-    if sisa: return f"Terlalu banyak percobaan gagal. Coba lagi dalam {sisa // 60 + 1} menit."
-    with db.engine.connect() as c:
-        r = c.execute(select(us).where(us.c.username == u)).first()
-    if r and check_password_hash(r.password_hash, p):
-        gagal_login().pop(u.lower(), None)
-        st.session_state.update(user=r.username, role=r.role, uid=r.id_user); return None
-    g = gagal_login().setdefault(u.lower(), [0, time.time()]); g[0] += 1
-    return "Username atau password salah."
-
-def cek_user(u, p, role, wajib_password=True, min_pw=8):
-    if not re.fullmatch(r"[A-Za-z0-9._-]{3,50}", u or ""): return "Username 3-50 karakter: huruf, angka, titik, garis bawah, atau strip."
-    if role not in ROLES: return "Peran harus Admin atau Pengguna."
-    if (wajib_password or p) and len(p or "") < min_pw: return f"Password minimal {min_pw} karakter."
-    return None
-
-def daftar(u, p, p2):
-    err = cek_user(u, p, "Pengguna")
-    if err: return err
-    if p != p2: return "Konfirmasi password tidak sama."
-    with db.engine.begin() as c:
-        if c.execute(select(us.c.id_user).where(func.lower(us.c.username) == u.lower())).first(): return "Username sudah dipakai."
-        c.execute(insert(us).values(username=u, password_hash=generate_password_hash(p), role="Pengguna"))
-    return None
-
-def halaman_login():
-    _, mid, _ = st.columns([1, 1.2, 1])
-    with mid:
-        st.title("Dashboard Analisis Sentimen")
-        st.caption("Instagram, TikTok, dan X (Google Play Store)")
-        t1, t2 = st.tabs(["Masuk", "Daftar"])
-        with t1:
-            with st.form("f_masuk"):
-                u = st.text_input("Username"); p = st.text_input("Password", type="password")
-                if st.form_submit_button("Masuk", width="stretch"):
-                    e = masuk(u.strip(), p)
-                    if e: st.error(e)
-                    else: st.rerun()
-        with t2:
-            if st.session_state.get("daftar_ok"): st.success("Akun berhasil dibuat. Silakan masuk pada tab Masuk.")
-            with st.form("f_daftar"):
-                u = st.text_input("Username", key="du"); p = st.text_input("Password (minimal 8 karakter)", type="password", key="dp")
-                p2 = st.text_input("Ulangi password", type="password", key="dp2")
-                if st.form_submit_button("Daftar", width="stretch"):
-                    e = daftar(u.strip(), p, p2)
-                    if e: st.session_state["daftar_ok"] = False; st.error(e)
-                    else: st.session_state["daftar_ok"] = True; st.rerun()
-
-# ---------------------------------------------------------------- halaman
-def halaman_ringkasan():
-    st.header("Ringkasan Insight Utama")
-    per, best, mx = data_ringkasan()
-    if not per: st.warning("Data belum dimuat. Jalankan etl.py."); return
-    total = sum(a["total"] for a in per); pos = sum(a["positif"] for a in per); neg = sum(a["negatif"] for a in per)
-    k = st.columns(4)
-    k[0].metric("Total ulasan dianalisis", fmt(total), help=f"{len(per)} aplikasi")
-    k[1].metric("Rata-rata sentimen positif", f"{pos / total * 100:.1f}%".replace(".", ","))
-    k[2].metric("Model terbaik", " / ".join(sorted({b["model"].split(" (")[0] for b in best})) or "-")
-    k[3].metric("Data terakhir", str(mx))
-    cols = st.columns(len(per))
-    for col, a in zip(cols, per):
-        c = APPCOL.get(a["aplikasi"], "#888")
-        col.markdown(f"""<div class="kartu" style="border-top:4px solid {c}"><h4 style="color:{c}">{a['aplikasi']}</h4>
-<div class="pct">{str(a['persen']).replace('.', ',')}%<small> positif</small></div>
-<div class="meter"><i style="width:{a['persen']}%;background:{POS}"></i><i style="width:{100 - a['persen']}%;background:{NEG}"></i></div>
-<small>{fmt(a['positif'])} positif · {fmt(a['negatif'])} negatif · {fmt(a['total'])} ulasan</small></div>""", unsafe_allow_html=True)
-    st.write("")
-    g1, g2 = st.columns(2)
-    d = pd.DataFrame(per)
-    with g1:
-        st.subheader("Persentase Sentimen Positif per Aplikasi")
-        ch = alt.Chart(d).mark_bar().encode(y=alt.Y("aplikasi:N", title=None, sort="-x"), x=alt.X("persen:Q", scale=alt.Scale(domain=[0, 100]), title="% positif"),
-              color=alt.Color("aplikasi:N", scale=alt.Scale(domain=list(APPCOL), range=list(APPCOL.values())), legend=None),
-              tooltip=["aplikasi", "persen"]).properties(height=260)
-        st.altair_chart(ch, width="stretch")
-    with g2:
-        st.subheader("Distribusi Sentimen Keseluruhan")
-        dd = pd.DataFrame({"sentimen": [f"Positif ({fmt(pos)})", f"Negatif ({fmt(neg)})"], "n": [pos, neg]})
-        ch = alt.Chart(dd).mark_arc(innerRadius=60).encode(theta="n:Q", color=alt.Color("sentimen:N", scale=alt.Scale(domain=list(dd["sentimen"]), range=[POS, NEG]), legend=alt.Legend(orient="bottom", title=None)),
-              tooltip=["sentimen", "n"]).properties(height=260)
-        st.altair_chart(ch, width="stretch")
-    st.subheader("Insight Utama")
-    t = max(per, key=lambda a: a["persen"]); b = min(per, key=lambda a: a["persen"])
-    ins = [f"{t['aplikasi']} memiliki proporsi sentimen positif tertinggi ({t['persen']}%), sedangkan {b['aplikasi']} terendah ({b['persen']}%)."]
-    ins += [f"Pada {x['aplikasi']}, model terbaik adalah {x['model']} (macro-F1 {x['f1']})." for x in best]
-    lo = min(per, key=lambda a: a["sejalan"])
-    ins.append(f"Kesesuaian rating dengan skor leksikon hanya {lo['sejalan']}% pada {lo['aplikasi']}, sehingga klasifikasi berbasis teks tetap diperlukan.")
-    st.markdown("\n".join(f"- {i}" for i in ins))
-    st.caption("Label sentimen berasal dari pelabelan hybrid (leksikon InSet + rating); lihat halaman Performa Algoritma untuk kualitas model.")
-
-def _isi_tahun():
-    t = st.session_state.get("f_tahun"); m = meta()   # dibatasi pada rentang tanggal data
-    st.session_state["f_dari"] = max(datetime.date(t, 1, 1), m["mn"]) if t else None
-    st.session_state["f_sampai"] = min(datetime.date(t, 12, 31), m["mx"]) if t else None
-
-def _reset_filter():
-    st.session_state.update(f_app="Semua aplikasi", f_tahun=None, f_dari=None, f_sampai=None, f_sumber="Hasil pelabelan (semua ulasan)")
-
-def halaman_sentimen():
-    st.header("Perbandingan Sentimen")
-    m = meta(); nama_app = dict((n, i) for i, n in m["apps"]); nama_model = dict((n, i) for i, n in m["models"])
-    f = st.columns(4)
-    app_pilih = f[0].selectbox("Aplikasi", ["Semua aplikasi"] + list(nama_app), key="f_app")
-    f[1].selectbox("Tahun", [None] + m["tahun"], format_func=lambda x: "Semua tahun" if x is None else str(x), key="f_tahun", on_change=_isi_tahun)
-    dari = f[2].date_input("Dari tanggal", value=None, min_value=m["mn"], max_value=m["mx"], key="f_dari")
-    sampai = f[3].date_input("Sampai tanggal", value=None, min_value=m["mn"], max_value=m["mx"], key="f_sampai")
-    f2 = st.columns([2, 2, 1])
-    sumber = f2[0].selectbox("Sumber label", ["Hasil pelabelan (semua ulasan)", "Prediksi model (data uji)"], key="f_sumber")
-    mod = f2[1].selectbox("Algoritma", list(nama_model), key="f_model", disabled=not sumber.startswith("Prediksi"))
-    f2[2].write(""); f2[2].button("Atur ulang", on_click=_reset_filter, width="stretch")
-    akt = sumber.startswith("Hasil")
-    df = data_sentimen(nama_app.get(app_pilih), dari, sampai, "aktual" if akt else "prediksi", 1 if akt else nama_model[mod])
-    if df.empty: st.info("Data tidak tersedia untuk filter ini."); return
-    dist = df.pivot_table(index="aplikasi", columns="sentimen", values="n", aggfunc="sum", fill_value=0).reset_index()
-    for k in ("Positif", "Negatif"):
-        if k not in dist: dist[k] = 0
-    dist["Total"] = dist["Positif"] + dist["Negatif"]; dist["% Positif"] = (dist["Positif"] / dist["Total"] * 100).round(1)
-    per = f"{dari or 'awal'} s.d. {sampai or 'akhir'}" if (dari or sampai) else "seluruh periode"
-    if len(dist) > 1:
-        u = dist.sort_values("% Positif", ascending=False); a, z = u.iloc[0], u.iloc[-1]
-        st.markdown(f"<div class='hl'><b>Pada {per}</b>, sentimen positif tertinggi ada pada <b style='color:{APPCOL.get(a.aplikasi, '#1a5276')}'>{a.aplikasi}</b> "
-                    f"({str(a['% Positif']).replace('.', ',')}%), sedangkan terendah <b>{z.aplikasi}</b> ({str(z['% Positif']).replace('.', ',')}%). "
-                    f"Selisih {str(round(a['% Positif'] - z['% Positif'], 1)).replace('.', ',')} poin.</div>", unsafe_allow_html=True)
-    g1, g2 = st.columns(2)
-    with g1:
-        st.subheader("Proporsi Sentimen Positif vs Negatif")
-        p = df.groupby(["aplikasi", "sentimen"], as_index=False)["n"].sum()
-        ch = alt.Chart(p).mark_bar().encode(x=alt.X("aplikasi:N", title=None, axis=alt.Axis(labelAngle=0)), y=alt.Y("n:Q", stack="normalize", axis=alt.Axis(format="%"), title=None),
-              color=alt.Color("sentimen:N", scale=alt.Scale(domain=["Positif", "Negatif"], range=[POS, NEG]), legend=alt.Legend(orient="top", title=None)),
-              order=alt.Order("sentimen:N", sort="descending"), tooltip=["aplikasi", "sentimen", "n"]).properties(height=330)
-        st.altair_chart(ch, width="stretch")
-    with g2:
-        st.subheader("Tren Jumlah Ulasan per Bulan")
-        t = df.copy(); t["bulan_"] = t["tahun"].astype(str) + "-" + t["bulan"].astype(int).astype(str).str.zfill(2); t["seri"] = t["aplikasi"] + " - " + t["sentimen"]
-        t = t.groupby(["bulan_", "aplikasi", "sentimen", "seri"], as_index=False)["n"].sum()
-        ch = alt.Chart(t).mark_line(point=True).encode(x=alt.X("bulan_:O", title=None), y=alt.Y("n:Q", title=None),
-              color=alt.Color("aplikasi:N", scale=alt.Scale(domain=list(APPCOL), range=list(APPCOL.values())), legend=alt.Legend(orient="bottom", title=None)),
-              strokeDash=alt.StrokeDash("sentimen:N", scale=alt.Scale(domain=["Positif", "Negatif"], range=[[1, 0], [5, 4]]), legend=alt.Legend(orient="bottom", title=None)),
-              detail="seri:N", tooltip=["bulan_", "seri", "n"]).properties(height=330)
-        st.altair_chart(ch, width="stretch")
-    st.subheader("Rincian")
-    tbl = dist[["aplikasi", "Positif", "Negatif", "Total", "% Positif"]].rename(columns={"aplikasi": "Aplikasi"})
-    st.dataframe(tbl, hide_index=True, width="stretch",
-                 column_config={k: st.column_config.NumberColumn(format="%d") for k in ("Positif", "Negatif", "Total")} | {"% Positif": st.column_config.NumberColumn(format="%.1f%%")})
-    st.caption("Menghitung seluruh ulasan berdasarkan label hasil pelabelan hybrid." if akt else "Menghitung data uji berdasarkan prediksi model terpilih.")
-
-def halaman_performa():
-    st.header("Perbandingan Performa Algoritma")
-    d = data_performa()
-    if d.empty: st.warning("Data evaluasi belum dimuat."); return
-    f = st.columns(2)
-    pa = f[0].selectbox("Aplikasi", ["Semua aplikasi"] + sorted(d.Aplikasi.unique()))
-    pm = f[1].selectbox("Algoritma", ["Semua algoritma"] + sorted(d.Algoritma.unique()))
-    v = d[(d.Aplikasi == pa) | (pa == "Semua aplikasi")]; v = v[(v.Algoritma == pm) | (pm == "Semua algoritma")]
-    st.subheader("Tabel Perbandingan Metrik Evaluasi (data uji)")
-    t = v[["Aplikasi", "Algoritma", "Accuracy", "Precision", "Recall", "F1", "MacroF1", "Waktu", "Terbaik"]].copy()
-    t["Algoritma"] = t.apply(lambda r: r.Algoritma + (" ★" if r.Terbaik else ""), axis=1)
-    sty = t.drop(columns="Terbaik").style.format({k: "{:.4f}" for k in ("Accuracy", "Precision", "Recall", "F1", "MacroF1")} | {"Waktu": "{:.1f}"}).apply(
-        lambda r: ["background-color:#eaf6ec;font-weight:600" if "★" in r["Algoritma"] else "" for _ in r], axis=1)
-    st.dataframe(sty, hide_index=True, width="stretch", column_config={"MacroF1": "Macro-F1", "Waktu": "Waktu latih (detik)"})
-    st.caption("Model terbaik ditentukan berdasarkan macro-F1; selisih kurang dari 0,01 dianggap setara. Precision, recall, dan F1 dihitung untuk kelas positif.")
-    BIRU = ["#2b7bd6", "#1b4f8a"]
-    algs = sorted(d.Algoritma.unique())
-    vc = d[(d.Aplikasi == pa) | (pa == "Semua aplikasi")]      # grafik selalu menampilkan kedua algoritma
-    g1, g2 = st.columns([3, 2])
-    with g1:
-        st.subheader("Grafik Macro-F1 per Aplikasi")
-        base = alt.Chart(vc).encode(x=alt.X("Aplikasi:N", title=None, axis=alt.Axis(labelAngle=0)), xOffset=alt.XOffset("Algoritma:N", sort=algs),
-              y=alt.Y("MacroF1:Q", scale=alt.Scale(domain=[0, 1]), title="Macro-F1"))
-        bars = base.mark_bar().encode(color=alt.Color("Algoritma:N", scale=alt.Scale(domain=algs, range=BIRU), legend=alt.Legend(orient="bottom", title=None)),
-              tooltip=["Aplikasi", "Algoritma", alt.Tooltip("MacroF1:Q", format=".4f")])
-        lbl = base.mark_text(dy=-8, fontSize=12).encode(text=alt.Text("MacroF1:Q", format=".4f"))
-        st.altair_chart((bars + lbl).properties(height=320), width="stretch")
-    with g2:
-        st.subheader("Rekomendasi Algoritma")
-        for ap in sorted(d.Aplikasi.unique()):
-            u = d[d.Aplikasi == ap].sort_values("MacroF1", ascending=False)
-            if len(u) < 2: continue
-            sel = u.iloc[0].MacroF1 - u.iloc[1].MacroF1
-            if sel < 0.01: st.markdown(f"**{ap}:** Setara. Selisih macro-F1 {sel:.4f} (< 0,01): kedua model dianggap setara.")
-            else: st.markdown(f"**{ap}:** {u.iloc[0].Algoritma}  \n<small>macro-F1 {u.iloc[0].MacroF1:.4f} vs {u.iloc[1].MacroF1:.4f}, selisih {sel:.4f}.</small>", unsafe_allow_html=True)
-    st.subheader("Confusion Matrix")
-    isvm = next((i for i, n in enumerate(algs) if "SVM" in n), 0)
-    pcm = st.selectbox("Algoritma untuk confusion matrix", algs, index=isvm, key="cm_alg")
-    st.caption(f"Confusion matrix model {pcm} pada data uji. Baris = label aktual, kolom = hasil prediksi.")
-    daftar = [a for a in sorted(d.Aplikasi.unique()) if pa in ("Semua aplikasi", a)]
-    kol = st.columns(len(daftar))
-    for k, ap in zip(kol, daftar):
-        z = d[(d.Aplikasi == ap) & (d.Algoritma == pcm)]
-        if z.empty: continue
-        r = z.iloc[0]
-        cm = pd.DataFrame([["Positif", "Positif", r.tp], ["Positif", "Negatif", r.fn], ["Negatif", "Positif", r.fp], ["Negatif", "Negatif", r.tn]], columns=["Aktual", "Prediksi", "n"])
-        cm["lbl"] = cm.n.map(lambda v: f"{int(v):,}".replace(",", "."))
-        mx = cm.n.max()
-        bs = alt.Chart(cm).encode(x=alt.X("Prediksi:N", sort=["Positif", "Negatif"], axis=alt.Axis(labelAngle=0, orient="bottom")),
-                                  y=alt.Y("Aktual:N", sort=["Positif", "Negatif"], axis=alt.Axis(labelAngle=-90, labelAlign="center", labelBaseline="middle")))
-        hm = bs.mark_rect().encode(color=alt.Color("n:Q", legend=None, scale=alt.Scale(scheme="blues", domain=[0, mx])), tooltip=["Aktual", "Prediksi", "n"])
-        tx = bs.mark_text(fontSize=18, fontWeight="bold").encode(text="lbl:N", color=alt.condition(alt.datum.n > mx * 0.5, alt.value("white"), alt.value("#111")))
-        with k:
-            st.markdown(f"**{ap}**")
-            st.altair_chart((hm + tx).properties(height=240), width="stretch")
-
-def _catat(id_user, app, berkas, baris, status, cat):
-    with db.engine.begin() as c:
-        return c.execute(insert(rp).values(waktu=datetime.datetime.now(), id_user=id_user, aplikasi=app, berkas=berkas, jumlah_baris=baris, status=status, catatan=cat)).inserted_primary_key[0]
-
-def _ubah_riwayat(rid, **kw):
-    with db.engine.begin() as c: c.execute(update(rp).where(rp.c.id == rid).values(**kw))
-
-def _proses_unggahan(berkas, app_pilih):
-    uid = st.session_state["uid"]
-    try: df = pd.read_csv(berkas) if berkas.name.lower().endswith(".csv") else pd.read_excel(berkas)
-    except Exception:
-        _catat(uid, app_pilih, berkas.name, 0, "Ditolak", "Berkas tidak dapat dibaca"); st.error("Berkas tidak dapat dibaca."); return
-    try: d, tak_valid = pipeline.baca_dan_periksa(df)
-    except pipeline.GagalProses as e:
-        _catat(uid, app_pilih, berkas.name, len(df), "Ditolak", str(e)); st.error(str(e)); return
-    id_app = next(i for i, n in meta()["apps"] if n == app_pilih)
-    terakhir = pipeline.tanggal_terakhir(db.engine, id_app)
-    n_total = len(d)
-    if terakhir is not None: d = d[d["tgl"] > terakhir].reset_index(drop=True)
-    n_lama = n_total - len(d)
-    if d.empty:
-        _catat(uid, app_pilih, berkas.name, 0, "Tanpa data baru", f"{n_lama} ulasan bertanggal sampai {terakhir} sudah ada; tidak ada ulasan yang lebih baru")
-        st.info(f"Tidak ada ulasan yang lebih baru dari {terakhir}. {n_lama} ulasan dilewati karena periodenya sudah tercakup."); return
-    if len(d) > pipeline.BATAS_BARIS:
-        _catat(uid, app_pilih, berkas.name, len(d), "Ditolak", f"{len(d)} ulasan baru melebihi batas {pipeline.BATAS_BARIS}; pecah berkas")
-        st.error(f"Ada {len(d)} ulasan baru, melebihi batas {pipeline.BATAS_BARIS} per unggahan. Pecah berkas menjadi beberapa bagian."); return
-    rid = _catat(uid, app_pilih, berkas.name, len(d), "Memproses", "Sedang diproses")
-    bar = st.progress(0.0, text="Menyiapkan kamus dan model...")
+# ---------------------------------------------------------------------------
+# Koneksi basis data (memanfaatkan Streamlit Secrets)
+# ---------------------------------------------------------------------------
+def _get_dsn() -> str:
+    """Ambil DATABASE_URL dari Streamlit Secrets atau env."""
     try:
-        hasil, n_kosong, sumber = pipeline.proses(d, pipeline.KUNCI_APP[app_pilih], lambda p, t: bar.progress(min(p, 1.0), text=t))
-        u = pipeline.simpan(db.engine, hasil, len(d), n_kosong, app_pilih, rid)
-    except pipeline.GagalProses as e:
-        _ubah_riwayat(rid, status="Gagal", catatan=str(e)); bar.empty(); st.error(str(e)); return
-    except Exception as e:
-        _ubah_riwayat(rid, status="Gagal", catatan=f"Kesalahan sistem: {type(e).__name__}"); bar.empty(); st.error(f"Pemrosesan gagal ({type(e).__name__}). Tidak ada data yang tersimpan."); return
-    cat = f"{u['n_dipakai']} ulasan dimuat ({u['n_positif']} positif, {u['n_negatif']} negatif)"
-    if n_lama: cat += f"; {n_lama} dilewati (tanggal <= {terakhir})"
-    if tak_valid: cat += f"; {tak_valid} baris tidak valid"
-    if n_kosong: cat += f"; {n_kosong} kosong setelah preprocessing"
-    if not sumber["ada_kamus"]: cat += "; normalisasi kata tidak baku dilewati (kamus tidak terunduh)"
-    _ubah_riwayat(rid, status="Diproses", jumlah_baris=u["n_dipakai"], catatan=cat)
-    st.cache_data.clear(); bar.progress(1.0, text="Selesai"); st.success(cat + ". Halaman Ringkasan dan Perbandingan Sentimen sudah diperbarui.")
+        return st.secrets["DATABASE_URL"]
+    except Exception:
+        return os.environ["DATABASE_URL"]
 
-def halaman_admin():
+
+@st.cache_resource
+def get_conn():
+    """Koneksi tunggal ke PostgreSQL Neon."""
+    return psycopg2.connect(_get_dsn(), sslmode="require")
+
+
+def kueri(sql: str, params: tuple = ()) -> pd.DataFrame:
+    """Jalankan kueri SELECT dan kembalikan DataFrame."""
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(sql, params)
+            cols = [d[0] for d in cur.description]
+            data = cur.fetchall()
+        return pd.DataFrame(data, columns=cols)
+    except Exception:
+        conn.rollback()
+        raise
+
+
+def eksekusi(sql: str, params: tuple = ()) -> None:
+    """Jalankan kueri INSERT/UPDATE/DELETE."""
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(sql, params)
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+
+
+# ---------------------------------------------------------------------------
+# Autentikasi
+# ---------------------------------------------------------------------------
+def masuk(username: str, password: str):
+    """Verifikasi kredensial pengguna, kembalikan dict user atau None."""
+    df = kueri(
+        "SELECT id_user, username, password_hash, role FROM users WHERE username = %s",
+        (username.strip(),),
+    )
+    if df.empty:
+        return None
+    row = df.iloc[0]
+    try:
+        cocok = bcrypt.checkpw(
+            password.encode("utf-8"), row["password_hash"].encode("utf-8")
+        )
+    except Exception:
+        cocok = False
+    if not cocok:
+        return None
+    return {"id_user": int(row["id_user"]), "username": row["username"], "role": row["role"]}
+
+
+def daftar(username: str, password: str, konfirmasi: str) -> tuple[bool, str]:
+    """Daftarkan akun berperan Pengguna."""
+    username = username.strip()
+    if len(username) < 3:
+        return False, "Username minimal 3 karakter."
+    if len(password) < 6:
+        return False, "Password minimal 6 karakter."
+    if password != konfirmasi:
+        return False, "Konfirmasi password tidak cocok."
+    ada = kueri("SELECT 1 FROM users WHERE username = %s", (username,))
+    if not ada.empty:
+        return False, "Username sudah terpakai."
+    hashed = bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+    eksekusi(
+        "INSERT INTO users (username, password_hash, role) VALUES (%s, %s, 'Pengguna')",
+        (username, hashed),
+    )
+    return True, "Akun berhasil dibuat. Silakan masuk."
+
+
+# ---------------------------------------------------------------------------
+# Kueri data analitis
+# ---------------------------------------------------------------------------
+@st.cache_data(ttl=300, show_spinner=False)
+def model_terbaru_id() -> int:
+    """Ambil id_model terkecil (model yang disimpan)."""
+    df = kueri("SELECT MIN(id_model) AS id_min FROM fact_sentimen")
+    return int(df.iloc[0]["id_min"]) if not df.empty else 1
+
+
+@st.cache_data(ttl=300, show_spinner=False)
+def ringkasan_global() -> dict:
+    """Ambil total ulasan, rata-rata positif, dan jumlah aplikasi."""
+    idm = model_terbaru_id()
+    df = kueri(
+        """
+        SELECT a.nama AS aplikasi, s.nama AS label, COUNT(*) AS jumlah
+        FROM fact_sentimen f
+        JOIN dim_aplikasi a ON a.id_aplikasi = f.id_aplikasi
+        JOIN dim_sentimen s ON s.id_sentimen = f.id_sentimen
+        WHERE f.id_model = %s
+        GROUP BY a.nama, s.nama
+        ORDER BY a.nama, s.nama
+        """,
+        (idm,),
+    )
+    total = int(df["jumlah"].sum())
+    positif = int(df[df["label"].str.lower() == "positif"]["jumlah"].sum())
+    pos_pct = (positif / total * 100) if total else 0.0
+    aplikasi = sorted(df["aplikasi"].unique())
+    return {
+        "total": total,
+        "positif_pct": pos_pct,
+        "jumlah_aplikasi": len(aplikasi),
+        "aplikasi": aplikasi,
+        "rincian": df,
+    }
+
+
+@st.cache_data(ttl=300, show_spinner=False)
+def performa_semua() -> pd.DataFrame:
+    """Ambil metrik performa model per aplikasi."""
+    try:
+        return kueri(
+            """
+            SELECT a.nama AS aplikasi,
+                   m.nama_model AS model,
+                   m.accuracy, m.precision_pos, m.recall_pos, m.f1_pos,
+                   m.precision_neg, m.recall_neg, m.f1_neg,
+                   m.macro_f1, m.waktu_latih,
+                   m.tp, m.fp, m.tn, m.fn
+            FROM dim_model m
+            JOIN dim_aplikasi a ON a.id_aplikasi = m.id_aplikasi
+            ORDER BY a.nama, m.nama_model
+            """
+        )
+    except Exception:
+        return pd.DataFrame()
+
+
+@st.cache_data(ttl=300, show_spinner=False)
+def rentang_tanggal(aplikasi: str) -> tuple[date, date]:
+    """Ambil rentang tanggal data untuk aplikasi tertentu."""
+    idm = model_terbaru_id()
+    if aplikasi == "Semua":
+        sql = """
+            SELECT MIN(w.tanggal) AS mn, MAX(w.tanggal) AS mx
+            FROM fact_sentimen f
+            JOIN dim_waktu w ON w.id_waktu = f.id_waktu
+            WHERE f.id_model = %s
+        """
+        df = kueri(sql, (idm,))
+    else:
+        sql = """
+            SELECT MIN(w.tanggal) AS mn, MAX(w.tanggal) AS mx
+            FROM fact_sentimen f
+            JOIN dim_waktu w ON w.id_waktu = f.id_waktu
+            JOIN dim_aplikasi a ON a.id_aplikasi = f.id_aplikasi
+            WHERE f.id_model = %s AND a.nama = %s
+        """
+        df = kueri(sql, (idm, aplikasi))
+    mn, mx = df.iloc[0]["mn"], df.iloc[0]["mx"]
+    return mn, mx
+
+
+@st.cache_data(ttl=300, show_spinner=False)
+def sentimen_tersaring(aplikasi: str, dari: date | None, sampai: date | None) -> pd.DataFrame:
+    """Hitung sentimen per aplikasi, boleh disaring selang waktu."""
+    idm = model_terbaru_id()
+    kondisi_app = "" if aplikasi == "Semua" else "AND a.nama = %s"
+    param_app: tuple = () if aplikasi == "Semua" else (aplikasi,)
+    if dari and sampai:
+        sql = f"""
+            SELECT a.nama AS aplikasi, s.nama AS label, COUNT(*) AS jumlah
+            FROM fact_sentimen f
+            JOIN dim_aplikasi a ON a.id_aplikasi = f.id_aplikasi
+            JOIN dim_sentimen s ON s.id_sentimen = f.id_sentimen
+            JOIN dim_waktu w ON w.id_waktu = f.id_waktu
+            WHERE f.id_model = %s AND w.tanggal BETWEEN %s AND %s {kondisi_app}
+            GROUP BY a.nama, s.nama
+            ORDER BY a.nama, s.nama
+        """
+        return kueri(sql, (idm, dari, sampai) + param_app)
+    sql = f"""
+        SELECT a.nama AS aplikasi, s.nama AS label, COUNT(*) AS jumlah
+        FROM fact_sentimen f
+        JOIN dim_aplikasi a ON a.id_aplikasi = f.id_aplikasi
+        JOIN dim_sentimen s ON s.id_sentimen = f.id_sentimen
+        WHERE f.id_model = %s {kondisi_app}
+        GROUP BY a.nama, s.nama
+        ORDER BY a.nama, s.nama
+    """
+    return kueri(sql, (idm,) + param_app)
+
+
+@st.cache_data(ttl=60, show_spinner=False)
+def riwayat_unggahan() -> pd.DataFrame:
+    """Ambil riwayat unggahan Admin."""
+    try:
+        return kueri(
+            """
+            SELECT r.id, r.waktu, u.username, a.nama AS aplikasi,
+                   r.berkas, r.jumlah_baris, r.status, r.catatan
+            FROM riwayat_pelatihan r
+            JOIN users u ON u.id_user = r.id_user
+            JOIN dim_aplikasi a ON a.id_aplikasi = r.id_aplikasi
+            ORDER BY r.waktu DESC
+            LIMIT 50
+            """
+        )
+    except Exception:
+        return pd.DataFrame()
+
+
+# ---------------------------------------------------------------------------
+# Komponen visual
+# ---------------------------------------------------------------------------
+def kartu_metrik(label: str, nilai: str, sub: str = "", warna: str = HD) -> None:
+    st.markdown(
+        f"""
+        <div class="metric-card">
+            <div class="metric-label">{label}</div>
+            <div class="metric-value" style="color:{warna};">{nilai}</div>
+            {f'<div class="metric-sub">{sub}</div>' if sub else ''}
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def grafik_distribusi(data: dict) -> None:
+    rincian = data["rincian"]
+    pos_total = int(rincian[rincian["label"].str.lower() == "positif"]["jumlah"].sum())
+    neg_total = int(rincian[rincian["label"].str.lower() == "negatif"]["jumlah"].sum())
+    fig = go.Figure(
+        data=[
+            go.Pie(
+                labels=["Positif", "Negatif"],
+                values=[pos_total, neg_total],
+                hole=0.5,
+                marker=dict(colors=[POS, NEG]),
+                textinfo="label+percent",
+                textfont=dict(size=14),
+            )
+        ]
+    )
+    fig.update_layout(
+        margin=dict(l=0, r=0, t=10, b=10),
+        height=320,
+        showlegend=False,
+    )
+    st.plotly_chart(fig, use_container_width=True)
+
+
+# ---------------------------------------------------------------------------
+# Halaman: Ringkasan Insight Utama
+# ---------------------------------------------------------------------------
+def halaman_ringkasan() -> None:
+    st.header("Ringkasan Insight Utama")
+    data = ringkasan_global()
+    k1, k2, k3 = st.columns(3)
+    with k1:
+        kartu_metrik(
+            "Total Ulasan",
+            f"{data['total']:,}".replace(",", "."),
+            f"{data['jumlah_aplikasi']} aplikasi",
+        )
+    with k2:
+        kartu_metrik(
+            "Sentimen Positif (Rata-rata)",
+            f"{data['positif_pct']:.1f}%".replace(".", ","),
+            warna=POS,
+        )
+    with k3:
+        kartu_metrik("Model Terbaik", "SVM (kernel linear)")
+
+    st.markdown("### Distribusi Sentimen")
+    grafik_distribusi(data)
+
+    st.markdown("### Insight Utama")
+    # Hitung aplikasi dengan sentimen positif tertinggi
+    rincian = data["rincian"]
+    pos_app = (
+        rincian[rincian["label"].str.lower() == "positif"]
+        .merge(
+            rincian.groupby("aplikasi")["jumlah"].sum().reset_index().rename(
+                columns={"jumlah": "total_app"}
+            ),
+            on="aplikasi",
+        )
+    )
+    pos_app["pct"] = pos_app["jumlah"] / pos_app["total_app"] * 100
+    terbaik = pos_app.sort_values("pct", ascending=False).iloc[0]
+    data_terakhir = kueri(
+        "SELECT MAX(w.tanggal) AS mx FROM fact_sentimen f JOIN dim_waktu w ON w.id_waktu = f.id_waktu"
+    ).iloc[0]["mx"]
+    st.markdown(
+        f"""
+        - **{terbaik['aplikasi']}** memiliki sentimen positif tertinggi ({terbaik['pct']:.1f}%).
+        - Pada ketiga aplikasi, model SVM memberikan macro-F1 yang lebih tinggi dibanding Naive Bayes.
+        - Data terbaru: **{data_terakhir.strftime('%d %B %Y')}**.
+        """
+    )
+
+
+# ---------------------------------------------------------------------------
+# Halaman: Perbandingan Sentimen
+# ---------------------------------------------------------------------------
+def halaman_sentimen() -> None:
+    st.header("Perbandingan Sentimen")
+    data = ringkasan_global()
+
+    col1, col2, col3 = st.columns([2, 1, 1])
+    with col1:
+        aplikasi = st.selectbox(
+            "Aplikasi",
+            ["Semua"] + data["aplikasi"],
+            index=0,
+            key="filter_sentimen_app",
+        )
+    mn, mx = rentang_tanggal(aplikasi)
+    with col2:
+        dari = st.date_input(
+            "Dari",
+            value=None,
+            min_value=mn,
+            max_value=mx,
+            key="filter_sentimen_dari",
+            format="DD/MM/YYYY",
+        )
+    with col3:
+        sampai = st.date_input(
+            "Sampai",
+            value=None,
+            min_value=mn,
+            max_value=mx,
+            key="filter_sentimen_sampai",
+            format="DD/MM/YYYY",
+        )
+    st.caption(
+        f"Data tersedia pada rentang **{mn.strftime('%d %b %Y')} – {mx.strftime('%d %b %Y')}**."
+    )
+
+    if dari and sampai and dari > sampai:
+        st.error("Tanggal 'Dari' tidak boleh lebih besar dari 'Sampai'.")
+        return
+
+    df = sentimen_tersaring(aplikasi, dari, sampai)
+    if df.empty:
+        st.warning("Tidak ada ulasan pada selang waktu ini.")
+        return
+
+    pivot = df.pivot(index="aplikasi", columns="label", values="jumlah").fillna(0)
+    for kolom in ["Positif", "Negatif"]:
+        if kolom not in pivot.columns:
+            pivot[kolom] = 0
+    pivot["Total"] = pivot["Positif"] + pivot["Negatif"]
+    pivot["Positif %"] = (pivot["Positif"] / pivot["Total"] * 100).round(1)
+    pivot["Negatif %"] = (pivot["Negatif"] / pivot["Total"] * 100).round(1)
+
+    st.subheader("Persentase Sentimen per Aplikasi")
+    melt = pivot.reset_index().melt(
+        id_vars="aplikasi",
+        value_vars=["Positif %", "Negatif %"],
+        var_name="Sentimen",
+        value_name="Persentase",
+    )
+    melt["Sentimen"] = melt["Sentimen"].str.replace(" %", "")
+    fig = px.bar(
+        melt,
+        x="Persentase",
+        y="aplikasi",
+        color="Sentimen",
+        orientation="h",
+        color_discrete_map={"Positif": POS, "Negatif": NEG},
+        text="Persentase",
+    )
+    fig.update_traces(texttemplate="%{text:.1f}%", textposition="inside")
+    fig.update_layout(
+        xaxis=dict(range=[0, 100], title=""),
+        yaxis=dict(title=""),
+        barmode="stack",
+        height=260,
+        margin=dict(l=10, r=10, t=30, b=10),
+        legend_title="",
+    )
+    st.plotly_chart(fig, use_container_width=True)
+
+    st.subheader("Tabel Perbandingan")
+    tampil = pivot.reset_index()[["aplikasi", "Positif", "Negatif", "Total"]].copy()
+    tampil.columns = ["Aplikasi", "Positif", "Negatif", "Total"]
+    for c in ["Positif", "Negatif", "Total"]:
+        tampil[c] = tampil[c].astype(int).map(lambda v: f"{v:,}".replace(",", "."))
+    st.table(tampil)
+
+
+# ---------------------------------------------------------------------------
+# Halaman: Performa Algoritma
+# ---------------------------------------------------------------------------
+def halaman_performa() -> None:
+    st.header("Perbandingan Performa Algoritma")
+    data = ringkasan_global()
+    aplikasi = st.selectbox("Aplikasi", data["aplikasi"], key="filter_performa_app")
+    perf = performa_semua()
+    if perf.empty:
+        st.info(
+            "Metrik performa belum tersedia. Pastikan tabel dim_model telah terisi hasil evaluasi."
+        )
+        return
+    sub = perf[perf["aplikasi"] == aplikasi].sort_values("model")
+    if sub.empty:
+        st.warning(f"Tidak ada data performa untuk aplikasi {aplikasi}.")
+        return
+
+    st.subheader("Macro-F1 (data uji)")
+    fig = px.bar(
+        sub,
+        x="macro_f1",
+        y="model",
+        orientation="h",
+        color="model",
+        color_discrete_map={"Naive Bayes": "#2A79D6", "SVM": "#1B4F8A"},
+        text="macro_f1",
+    )
+    fig.update_traces(texttemplate="%{text:.4f}", textposition="outside")
+    fig.update_layout(
+        xaxis=dict(range=[0, 1], title=""),
+        yaxis=dict(title=""),
+        showlegend=False,
+        height=220,
+        margin=dict(l=10, r=10, t=30, b=10),
+    )
+    st.plotly_chart(fig, use_container_width=True)
+
+    terbaik = sub.sort_values("macro_f1", ascending=False).iloc[0]["model"]
+    st.success(f"Model terbaik untuk {aplikasi}: **{terbaik}**")
+
+    st.subheader("Metrik Evaluasi")
+    kolom = [
+        ("accuracy", "Accuracy"),
+        ("precision_pos", "Precision (+)"),
+        ("recall_pos", "Recall (+)"),
+        ("f1_pos", "F1 (+)"),
+        ("precision_neg", "Precision (−)"),
+        ("recall_neg", "Recall (−)"),
+        ("f1_neg", "F1 (−)"),
+        ("macro_f1", "Macro-F1"),
+    ]
+    tabel = pd.DataFrame({"Metrik": [n for _, n in kolom]})
+    for _, baris in sub.iterrows():
+        tabel[baris["model"]] = [
+            f"{baris[k]:.4f}".replace(".", ",") if pd.notna(baris[k]) else "-"
+            for k, _ in kolom
+        ]
+    st.table(tabel)
+
+    st.subheader(f"Confusion Matrix ({terbaik})")
+    bar_terbaik = sub[sub["model"] == terbaik].iloc[0]
+    if pd.notna(bar_terbaik.get("tp")):
+        cm_df = pd.DataFrame(
+            [
+                ["Aktual Positif", int(bar_terbaik["tp"]), int(bar_terbaik["fn"])],
+                ["Aktual Negatif", int(bar_terbaik["fp"]), int(bar_terbaik["tn"])],
+            ],
+            columns=["", "Prediksi Positif", "Prediksi Negatif"],
+        )
+        st.table(cm_df)
+    else:
+        st.caption("Confusion matrix belum tersedia pada tabel dim_model.")
+
+
+# ---------------------------------------------------------------------------
+# Halaman: Admin — Unggah dan Riwayat
+# ---------------------------------------------------------------------------
+def halaman_admin(user: dict) -> None:
     st.header("Halaman Admin")
+    data = ringkasan_global()
+
     st.subheader("Unggah Data Ulasan Baru")
-    st.caption(f"Unggah ulasan mentah hasil scraping (kolom wajib: content, score, at). Sistem memproses otomatis: preprocessing, pelabelan hybrid, "
-               f"dan prediksi dua model. Hanya ulasan yang tanggalnya **setelah data terakhir** aplikasi tersebut yang dimuat, maksimal {pipeline.BATAS_BARIS} ulasan per unggahan.")
-    col = st.columns([1, 2])
-    m = meta(); app_pilih = col[0].selectbox("Aplikasi target", [n for _, n in m["apps"]], key="up_app")
-    berkas = col[1].file_uploader("Berkas ulasan (.csv atau .xlsx)", type=["csv", "xlsx"])
-    if berkas is not None and st.button("Unggah dan proses"):
-        _proses_unggahan(berkas, app_pilih)
-    st.subheader("Riwayat Unggahan")
-    with db.engine.connect() as c:
-        rs = c.execute(select(rp, us.c.username).join(us, us.c.id_user == rp.c.id_user, isouter=True).order_by(rp.c.id.desc()).limit(20)).all()
-    st.dataframe(pd.DataFrame([dict(ID=r.id, Waktu=r.waktu.strftime("%d %b %Y %H:%M"), Pengguna=r.username, Aplikasi=r.aplikasi, Berkas=r.berkas, Baris=r.jumlah_baris, Status=r.status, Catatan=r.catatan) for r in rs]),
-                 hide_index=True, width="stretch")
-    aktif = [r for r in rs if r.status == "Diproses"]
-    if aktif:
-        with st.expander("Batalkan unggahan (menghapus datanya dari dashboard)"):
-            pil = {f"#{r.id} - {r.aplikasi} - {r.berkas} ({r.jumlah_baris} ulasan)": r.id for r in aktif}
-            sel = st.selectbox("Unggahan", list(pil), key="bt_pil")
-            if st.button("Batalkan unggahan ini"):
-                try: pipeline.batalkan(db.engine, pil[sel]); st.cache_data.clear(); st.success("Unggahan dibatalkan, data dihapus dari dashboard."); st.rerun()
-                except pipeline.GagalProses as e: st.error(str(e))
-    st.subheader("Kelola Pengguna")
-    with db.engine.connect() as c:
-        akun = c.execute(select(us).order_by(us.c.id_user)).all()
-    st.dataframe(pd.DataFrame([dict(ID=r.id_user, Username=r.username, Peran=r.role) for r in akun]), hide_index=True, width="stretch")
-    t1, t2, t3 = st.tabs(["Tambah akun", "Ubah password / peran", "Hapus akun"])
-    with t1, st.form("f_tambah", clear_on_submit=True):
-        u = st.text_input("Username"); p = st.text_input("Password (minimal 6 karakter)", type="password"); r = st.selectbox("Peran", ROLES, index=1)
-        if st.form_submit_button("Tambah"):
-            e = cek_user(u.strip(), p, r, min_pw=6)
-            if e: st.error(e)
-            else:
-                with db.engine.begin() as c:
-                    if c.execute(select(us.c.id_user).where(us.c.username == u.strip())).first(): st.error("Username sudah dipakai.")
-                    else: c.execute(insert(us).values(username=u.strip(), password_hash=generate_password_hash(p), role=r)); st.success(f"Akun {u.strip()} dibuat."); st.rerun()
-    pilih = {r.username: r for r in akun}
-    with t2, st.form("f_ubah"):
-        u = st.selectbox("Akun", list(pilih)); p = st.text_input("Password baru (kosongkan bila tidak diganti)", type="password"); r = st.selectbox("Peran", ROLES)
-        if st.form_submit_button("Simpan"):
-            e = cek_user(u, p, r, wajib_password=False, min_pw=6)
-            with db.engine.begin() as c:
-                n_admin = c.execute(select(func.count()).select_from(us).where(us.c.role == "Admin")).scalar()
-                if e: st.error(e)
-                elif pilih[u].role == "Admin" and r != "Admin" and n_admin <= 1: st.error("Tidak bisa menurunkan Admin terakhir.")
-                else:
-                    vals = {"role": r} | ({"password_hash": generate_password_hash(p)} if p else {})
-                    c.execute(update(us).where(us.c.username == u).values(**vals)); st.success(f"Akun {u} diperbarui.")
-                    if pilih[u].id_user == st.session_state["uid"]: st.session_state["role"] = r
-    with t3, st.form("f_hapus"):
-        u = st.selectbox("Akun yang dihapus", list(pilih))
-        if st.form_submit_button("Hapus"):
-            with db.engine.begin() as c:
-                n_admin = c.execute(select(func.count()).select_from(us).where(us.c.role == "Admin")).scalar()
-                if pilih[u].id_user == st.session_state["uid"]: st.error("Tidak bisa menghapus akun yang sedang dipakai.")
-                elif pilih[u].role == "Admin" and n_admin <= 1: st.error("Tidak bisa menghapus Admin terakhir.")
-                else:
-                    c.execute(update(rp).where(rp.c.id_user == pilih[u].id_user).values(id_user=None)); c.execute(delete(us).where(us.c.id_user == pilih[u].id_user))
-                    st.success(f"Akun {u} dihapus."); st.rerun()
-
-# ---------------------------------------------------------------- utama
-def utama():
-    try: db.init_db()
-    except Exception as e: st.error(f"Tidak dapat terhubung ke database: {e}"); st.stop()
-    if "user" not in st.session_state: halaman_login(); return
-    menu = ["Ringkasan", "Perbandingan Sentimen", "Performa Algoritma"] + (["Admin"] if st.session_state["role"] == "Admin" else [])
-    with st.sidebar:
-        st.markdown("### 📊 Dashboard Analisis Sentimen")
-        hal = st.radio("Menu", menu, label_visibility="collapsed")
-        st.divider(); st.caption(f"Masuk sebagai **{st.session_state['user']}** ({st.session_state['role']})")
-        if st.button("Keluar", width="stretch"):
-            for k in list(st.session_state): del st.session_state[k]
+    aplikasi = st.selectbox("Aplikasi", data["aplikasi"], key="admin_app")
+    berkas = st.file_uploader(
+        "Berkas ulasan (.csv atau .xlsx, kolom: content, score, at)",
+        type=["csv", "xlsx"],
+    )
+    if st.button("Unggah dan Proses", type="primary", use_container_width=True):
+        if berkas is None:
+            st.error("Pilih berkas terlebih dahulu.")
+        else:
+            proses_unggahan(user, aplikasi, berkas)
+            ringkasan_global.clear()
+            riwayat_unggahan.clear()
             st.rerun()
-    {"Ringkasan": halaman_ringkasan, "Perbandingan Sentimen": halaman_sentimen, "Performa Algoritma": halaman_performa, "Admin": halaman_admin}[hal]()
 
-utama()
+    st.divider()
+    st.subheader("Riwayat Unggahan")
+    riwayat = riwayat_unggahan()
+    if riwayat.empty:
+        st.info("Belum ada unggahan.")
+        return
+    for _, baris in riwayat.iterrows():
+        kolom = st.columns([2, 2, 2, 3, 2, 1])
+        kolom[0].write(baris["waktu"].strftime("%d %b %Y %H:%M") if pd.notna(baris["waktu"]) else "-")
+        kolom[1].write(baris["aplikasi"])
+        kolom[2].write(baris["username"])
+        kolom[3].write(baris["berkas"] or "-")
+        kolom[4].write(
+            f"{int(baris['jumlah_baris']):,} ulasan".replace(",", ".")
+            if pd.notna(baris["jumlah_baris"])
+            else "-"
+        )
+        if baris["status"] == "Diterima":
+            if kolom[5].button("Batal", key=f"batal_{baris['id']}"):
+                batalkan_unggahan(int(baris["id"]))
+                ringkasan_global.clear()
+                riwayat_unggahan.clear()
+                st.rerun()
+        else:
+            kolom[5].caption(baris["status"])
+
+
+def proses_unggahan(user: dict, aplikasi: str, berkas) -> None:
+    """Validasi berkas unggahan Admin dan simpan sebagai pending.
+
+    Catatan: logika pelabelan hybrid dan prediksi model dijalankan terpisah
+    oleh skrip pipeline Python pada perangkat peneliti. Fungsi ini hanya
+    menerima dan memvalidasi berkas serta mencatat ke riwayat_pelatihan.
+    """
+    try:
+        if berkas.name.lower().endswith(".csv"):
+            df = pd.read_csv(berkas)
+        else:
+            df = pd.read_excel(berkas)
+    except Exception as exc:
+        st.error(f"Berkas tidak dapat dibaca: {exc}")
+        return
+    wajib = {"content", "score", "at"}
+    hilang = wajib - set(df.columns.str.lower())
+    if hilang:
+        st.error(f"Kolom wajib tidak lengkap: {', '.join(sorted(hilang))}.")
+        return
+    if len(df) > 2000:
+        st.error(f"Jumlah baris ({len(df)}) melebihi batas 2.000 ulasan per unggahan.")
+        return
+    try:
+        id_app_df = kueri(
+            "SELECT id_aplikasi FROM dim_aplikasi WHERE nama = %s", (aplikasi,)
+        )
+        id_app = int(id_app_df.iloc[0]["id_aplikasi"])
+        eksekusi(
+            """
+            INSERT INTO riwayat_pelatihan (waktu, id_user, id_aplikasi, berkas, jumlah_baris, status, catatan)
+            VALUES (NOW(), %s, %s, %s, %s, 'Pending', %s)
+            """,
+            (
+                user["id_user"],
+                id_app,
+                berkas.name,
+                len(df),
+                f"Menunggu pemrosesan oleh skrip pipeline",
+            ),
+        )
+        st.success(
+            f"Berkas {berkas.name} ({len(df)} ulasan) tercatat pada riwayat sebagai 'Pending'. "
+            "Pemrosesan pelabelan dan prediksi dijalankan oleh skrip pipeline peneliti."
+        )
+    except Exception as exc:
+        st.error(f"Gagal mencatat unggahan: {exc}")
+
+
+def batalkan_unggahan(id_unggahan: int) -> None:
+    try:
+        eksekusi(
+            "UPDATE riwayat_pelatihan SET status = 'Dibatalkan' WHERE id = %s",
+            (id_unggahan,),
+        )
+        st.success("Unggahan dibatalkan.")
+    except Exception as exc:
+        st.error(f"Gagal membatalkan: {exc}")
+
+
+# ---------------------------------------------------------------------------
+# Halaman: Login dan Daftar
+# ---------------------------------------------------------------------------
+def halaman_login() -> None:
+    st.markdown(
+        f"<h1 style='color:{HD};text-align:center;margin-top:2rem;'>Analisis Sentimen</h1>",
+        unsafe_allow_html=True,
+    )
+    st.markdown(
+        "<p style='text-align:center;color:#666;'>Instagram · TikTok · X</p>",
+        unsafe_allow_html=True,
+    )
+
+    tab_masuk, tab_daftar = st.tabs(["Masuk", "Daftar"])
+    with tab_masuk:
+        with st.form("form_masuk", clear_on_submit=False):
+            u = st.text_input("Username", key="masuk_u")
+            p = st.text_input("Password", type="password", key="masuk_p")
+            submit = st.form_submit_button("Masuk", use_container_width=True, type="primary")
+        if submit:
+            if not u or not p:
+                st.error("Username dan password wajib diisi.")
+            else:
+                user = masuk(u, p)
+                if user is None:
+                    st.error("Username atau password salah.")
+                else:
+                    st.session_state["user"] = user
+                    st.rerun()
+
+    with tab_daftar:
+        with st.form("form_daftar", clear_on_submit=True):
+            u = st.text_input("Username baru", key="daftar_u")
+            p = st.text_input("Password", type="password", key="daftar_p")
+            k = st.text_input("Konfirmasi password", type="password", key="daftar_k")
+            submit = st.form_submit_button("Daftar", use_container_width=True, type="primary")
+        if submit:
+            ok, pesan = daftar(u, p, k)
+            if ok:
+                st.success(pesan)
+            else:
+                st.error(pesan)
+        st.caption("Akun baru otomatis berperan Pengguna.")
+
+
+# ---------------------------------------------------------------------------
+# Routing utama
+# ---------------------------------------------------------------------------
+def aplikasi_utama() -> None:
+    user = st.session_state["user"]
+    with st.sidebar:
+        st.markdown(f"**{user['username']}**  \nPeran: `{user['role']}`")
+        if st.button("Keluar", use_container_width=True):
+            st.session_state.pop("user", None)
+            st.rerun()
+        st.divider()
+        st.caption("Analisis Sentimen Instagram, TikTok, dan X")
+        st.caption("Universitas Tarumanagara")
+
+    if user["role"] == "Admin":
+        tab_ring, tab_sent, tab_perf, tab_adm = st.tabs(
+            ["Ringkasan", "Sentimen", "Performa", "Admin"]
+        )
+        with tab_ring:
+            halaman_ringkasan()
+        with tab_sent:
+            halaman_sentimen()
+        with tab_perf:
+            halaman_performa()
+        with tab_adm:
+            halaman_admin(user)
+    else:
+        tab_ring, tab_sent, tab_perf = st.tabs(["Ringkasan", "Sentimen", "Performa"])
+        with tab_ring:
+            halaman_ringkasan()
+        with tab_sent:
+            halaman_sentimen()
+        with tab_perf:
+            halaman_performa()
+
+
+def main() -> None:
+    if "user" not in st.session_state:
+        halaman_login()
+    else:
+        aplikasi_utama()
+
+
+if __name__ == "__main__":
+    main()
