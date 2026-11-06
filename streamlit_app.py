@@ -214,33 +214,25 @@ st.markdown(
         border-radius: 10px; margin: 1rem 0; font-size: 0.92rem;
     }
 
-    /* Login modern — gradient bg, kartu floating */
-    .login-wrapper {
-        min-height: calc(100vh - 80px);
-        display: flex; align-items: center; justify-content: center;
-        padding: 2rem 1rem;
-    }
-    .login-card {
-        background: #FFFFFF; padding: 2.5rem 2.2rem; border-radius: 20px;
-        box-shadow: 0 20px 50px rgba(30,90,138,0.12);
-        max-width: 440px; width: 100%; margin: 0 auto;
-        border: 1px solid #E2E8F0;
+    /* Login modern — ringkas, tanpa perlu scroll */
+    .login-header {
+        text-align: center; padding: 0.4rem 0 1rem 0;
     }
     .login-logo {
-        width: 60px; height: 60px; border-radius: 16px;
+        width: 54px; height: 54px; border-radius: 14px;
         background: linear-gradient(135deg, #1E5A8A 0%, #0A3B5E 100%);
-        display: flex; align-items: center; justify-content: center;
-        color: white; font-size: 1.8rem;
-        margin: 0 auto 1rem auto;
+        display: inline-flex; align-items: center; justify-content: center;
+        color: white; font-size: 1.6rem;
         box-shadow: 0 8px 20px rgba(30,90,138,0.25);
+        margin-bottom: 0.7rem;
     }
     .login-title {
-        color: #0A3B5E; text-align: center; font-size: 1.7rem;
-        font-weight: 800; margin: 0 0 0.4rem 0; letter-spacing: -0.02em;
+        color: #0A3B5E; text-align: center; font-size: 1.55rem;
+        font-weight: 800; margin: 0 0 0.3rem 0; letter-spacing: -0.02em;
     }
     .login-subtitle {
-        color: #64748B; text-align: center; font-size: 0.92rem;
-        margin-bottom: 1.6rem;
+        color: #64748B; text-align: center; font-size: 0.88rem;
+        margin: 0;
     }
 
     /* Buttons */
@@ -835,9 +827,7 @@ def halaman_sentimen() -> None:
         sampai = st.date_input("Sampai tanggal", value=None, min_value=mn, max_value=mx,
                                key="fs_sampai", format="DD/MM/YYYY")
 
-    c5, c6, c7 = st.columns([1.5, 1.5, 1])
-    with c5:
-        sumber = st.selectbox("Sumber label", ["Hasil pelabelan (semua ulasan)"], key="fs_sumber")
+    c6, c7 = st.columns([3, 1])
     with c6:
         model_opsi = ["Semua algoritma"] + daftar_model()
         model = st.selectbox("Algoritma", model_opsi, key="fs_model")
@@ -845,7 +835,7 @@ def halaman_sentimen() -> None:
         st.write("")
         st.write("")
         if st.button("Atur ulang", use_container_width=True):
-            for k in ["fs_app", "fs_tahun", "fs_dari", "fs_sampai", "fs_sumber", "fs_model"]:
+            for k in ["fs_app", "fs_tahun", "fs_dari", "fs_sampai", "fs_model"]:
                 st.session_state.pop(k, None)
             st.rerun()
     tutup_kartu()
@@ -1295,42 +1285,43 @@ def proses_unggahan(user: dict, aplikasi: str, berkas) -> None:
 # Login modern
 # ---------------------------------------------------------------------------
 def halaman_login() -> None:
-    st.markdown('<div class="login-wrapper">', unsafe_allow_html=True)
-    st.markdown('<div class="login-card">', unsafe_allow_html=True)
-    st.markdown('<div class="login-logo">📊</div>', unsafe_allow_html=True)
-    st.markdown(
-        '<div class="login-title">Dashboard Analisis Sentimen</div>'
-        '<div class="login-subtitle">Instagram, TikTok, dan X &middot; Google Play Store</div>',
-        unsafe_allow_html=True,
-    )
-    tab_masuk, tab_daftar = st.tabs(["Masuk", "Daftar"])
-    with tab_masuk:
-        with st.form("form_masuk", clear_on_submit=False):
-            u = st.text_input("Username", key="masuk_u", placeholder="masukkan username")
-            p = st.text_input("Password", type="password", key="masuk_p", placeholder="masukkan password")
-            submit = st.form_submit_button("Masuk", use_container_width=True, type="primary")
-        if submit:
-            if not u or not p:
-                st.error("Username dan password wajib diisi.")
-            else:
-                user = masuk(u, p)
-                if user is None:
-                    st.error("Username atau password salah.")
+    col_kiri, col_tengah, col_kanan = st.columns([1, 1.3, 1])
+    with col_tengah:
+        st.markdown(
+            '<div class="login-header">'
+            '<div class="login-logo">📊</div>'
+            '<div class="login-title">Dashboard Analisis Sentimen</div>'
+            '<div class="login-subtitle">Instagram, TikTok, dan X · Google Play Store</div>'
+            '</div>',
+            unsafe_allow_html=True,
+        )
+        tab_masuk, tab_daftar = st.tabs(["Masuk", "Daftar"])
+        with tab_masuk:
+            with st.form("form_masuk", clear_on_submit=False):
+                u = st.text_input("Username", key="masuk_u", placeholder="masukkan username")
+                p = st.text_input("Password", type="password", key="masuk_p", placeholder="masukkan password")
+                submit = st.form_submit_button("Masuk", use_container_width=True, type="primary")
+            if submit:
+                if not u or not p:
+                    st.error("Username dan password wajib diisi.")
                 else:
-                    st.session_state["user"] = user
-                    st.rerun()
-    with tab_daftar:
-        with st.form("form_daftar", clear_on_submit=True):
-            u = st.text_input("Username baru", key="daftar_u", placeholder="pilih username unik")
-            p = st.text_input("Password", type="password", key="daftar_p", placeholder="minimal 6 karakter")
-            k = st.text_input("Konfirmasi password", type="password", key="daftar_k", placeholder="ulangi password")
-            submit = st.form_submit_button("Daftar", use_container_width=True, type="primary")
-        if submit:
-            ok, pesan = daftar(u, p, k)
-            if ok: st.success(pesan)
-            else: st.error(pesan)
-        st.caption("Akun baru otomatis berperan Pengguna.")
-    st.markdown('</div></div>', unsafe_allow_html=True)
+                    user = masuk(u, p)
+                    if user is None:
+                        st.error("Username atau password salah.")
+                    else:
+                        st.session_state["user"] = user
+                        st.rerun()
+        with tab_daftar:
+            with st.form("form_daftar", clear_on_submit=True):
+                u = st.text_input("Username baru", key="daftar_u", placeholder="pilih username unik")
+                p = st.text_input("Password", type="password", key="daftar_p", placeholder="minimal 6 karakter")
+                k = st.text_input("Konfirmasi password", type="password", key="daftar_k", placeholder="ulangi password")
+                submit = st.form_submit_button("Daftar", use_container_width=True, type="primary")
+            if submit:
+                ok, pesan = daftar(u, p, k)
+                if ok: st.success(pesan)
+                else: st.error(pesan)
+            st.caption("Akun baru otomatis berperan Pengguna.")
 
 
 # ---------------------------------------------------------------------------
