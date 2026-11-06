@@ -1,13 +1,10 @@
 import os
-import io
-from datetime import date, datetime
 
 import bcrypt
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 import psycopg2
-import psycopg2.extras
 import streamlit as st
 
 # ---------------------------------------------------------------------------
@@ -45,10 +42,9 @@ st.markdown(
 
 
 # ---------------------------------------------------------------------------
-# Koneksi basis data (memanfaatkan Streamlit Secrets)
+# Koneksi basis data
 # ---------------------------------------------------------------------------
 def _get_dsn() -> str:
-    """Ambil DATABASE_URL dari Streamlit Secrets atau env."""
     try:
         return st.secrets["DATABASE_URL"]
     except Exception:
@@ -57,12 +53,10 @@ def _get_dsn() -> str:
 
 @st.cache_resource
 def get_conn():
-    """Koneksi tunggal ke PostgreSQL Neon."""
     return psycopg2.connect(_get_dsn(), sslmode="require")
 
 
 def kueri(sql: str, params: tuple = ()) -> pd.DataFrame:
-    """Jalankan kueri SELECT dan kembalikan DataFrame."""
     conn = get_conn()
     try:
         with conn.cursor() as cur:
@@ -76,7 +70,6 @@ def kueri(sql: str, params: tuple = ()) -> pd.DataFrame:
 
 
 def eksekusi(sql: str, params: tuple = ()) -> None:
-    """Jalankan kueri INSERT/UPDATE/DELETE."""
     conn = get_conn()
     try:
         with conn.cursor() as cur:
@@ -91,7 +84,6 @@ def eksekusi(sql: str, params: tuple = ()) -> None:
 # Autentikasi
 # ---------------------------------------------------------------------------
 def masuk(username: str, password: str):
-    """Verifikasi kredensial pengguna, kembalikan dict user atau None."""
     df = kueri(
         "SELECT id_user, username, password_hash, role FROM users WHERE username = %s",
         (username.strip(),),
@@ -111,7 +103,6 @@ def masuk(username: str, password: str):
 
 
 def daftar(username: str, password: str, konfirmasi: str) -> tuple[bool, str]:
-    """Daftarkan akun berperan Pengguna."""
     username = username.strip()
     if len(username) < 3:
         return False, "Username minimal 3 karakter."
@@ -134,30 +125,46 @@ def daftar(username: str, password: str, konfirmasi: str) -> tuple[bool, str]:
 # Kueri data analitis
 # ---------------------------------------------------------------------------
 @st.cache_data(ttl=300, show_spinner=False)
-def model_terbaru_id() -> int:
-    """Ambil id_model terkecil (model yang disimpan)."""
-    df = kueri("SELECT MIN(id_model) AS id_min FROM fact_sentimen")
-    return int(df.iloc[0]["id_min"]) if not df.empty else 1
+def model_utama_id() -> int:
+    """Ambil id_model bukan pembanding (SVM/NB utama)."""
+    df = kueri(
+        "SELECT id_model FROM dim_model WHERE COALESCE(pembanding, FALSE) = FALSE ORDER BY id_model LIMIT 1"
+    )
+    if not df.empty:
+        return int(df.iloc[0]["id_model"])
+    df2 = kueri("SELECT MIN(id_model) AS id_min FROM fact_sentimen")
+    return int(df2.iloc[0]["id_min"]) if not df2.empty else 1
+
+
+@st.cache_data(ttl=300, show_spinner=False)
+def daftar_aplikasi() -> list[str]:
+    df = kueri("SELECT nama_aplikasi FROM dim_aplikasi ORDER BY nama_aplikasi")
+    return df["nama_aplikasi"].tolist()
 
 
 @st.cache_data(ttl=300, show_spinner=False)
 def ringkasan_global() -> dict:
-    """Ambil total ulasan, rata-rata positif, dan jumlah aplikasi."""
-    idm = model_terbaru_id()
+    """Total ulasan, rata-rata positif, dan jumlah aplikasi."""
     df = kueri(
         """
-        SELECT a.nama AS aplikasi, s.nama AS label, COUNT(*) AS jumlah
+        SELECT a.nama_aplikasi AS aplikasi,
+               s.label_sentimen AS label,
+               COUNT(*) AS jumlah
         FROM fact_sentimen f
         JOIN dim_aplikasi a ON a.id_aplikasi = f.id_aplikasi
         JOIN dim_sentimen s ON s.id_sentimen = f.id_sentimen
-        WHERE f.id_model = %s
-        GROUP BY a.nama, s.nama
-        ORDER BY a.nama, s.nama
-        """,
-        (idm,),
+        GROUP BY a.nama_aplikasi, s.label_sentimen
+        ORDER BY a.nama_aplikasi, s.label_sentimen
+        """
     )
-    total = int(df["jumlah"].sum())
-    positif = int(df[df["label"].str.lower() == "positif"]["jumlah"].sum())
+    # Normalkan label jadi Title Case supaya konsisten
+    df["label"] = df["label"].str.strip().str.title()
+    total_rincian = (
+        df.groupby("aplikasi")["jumlah"].sum().reset_index().rename(columns={"jumlah": "total_app"})
+    )
+    df = df.merge(total_rincian, on="aplikasi")
+    total = int(df["jumlah"].sum()) // 2 if False else int(total_rincian["total_app"].sum())
+    positif = int(df[df["label"] == "Positif"]["jumlah"].sum())
     pos_pct = (positif / total * 100) if total else 0.0
     aplikasi = sorted(df["aplikasi"].unique())
     return {
@@ -170,92 +177,144 @@ def ringkasan_global() -> dict:
 
 
 @st.cache_data(ttl=300, show_spinner=False)
-def performa_semua() -> pd.DataFrame:
-    """Ambil metrik performa model per aplikasi."""
-    try:
-        return kueri(
-            """
-            SELECT a.nama AS aplikasi,
-                   m.nama_model AS model,
-                   m.accuracy, m.precision_pos, m.recall_pos, m.f1_pos,
-                   m.precision_neg, m.recall_neg, m.f1_neg,
-                   m.macro_f1, m.waktu_latih,
-                   m.tp, m.fp, m.tn, m.fn
-            FROM dim_model m
-            JOIN dim_aplikasi a ON a.id_aplikasi = m.id_aplikasi
-            ORDER BY a.nama, m.nama_model
-            """
-        )
-    except Exception:
-        return pd.DataFrame()
+def metrik_model() -> pd.DataFrame:
+    """Hitung metrik evaluasi per (aplikasi, model) dari data uji.
+
+    Pakai id_sentimen (aktual) vs id_sentimen_prediksi, difilter data_uji = TRUE.
+    """
+    df = kueri(
+        """
+        SELECT a.nama_aplikasi AS aplikasi,
+               m.nama_model AS model,
+               s_akt.label_sentimen AS aktual,
+               s_pre.label_sentimen AS prediksi,
+               COUNT(*) AS n
+        FROM fact_sentimen f
+        JOIN dim_aplikasi a ON a.id_aplikasi = f.id_aplikasi
+        JOIN dim_model m ON m.id_model = f.id_model
+        JOIN dim_sentimen s_akt ON s_akt.id_sentimen = f.id_sentimen
+        JOIN dim_sentimen s_pre ON s_pre.id_sentimen = f.id_sentimen_prediksi
+        WHERE f.data_uji = TRUE
+        GROUP BY a.nama_aplikasi, m.nama_model, s_akt.label_sentimen, s_pre.label_sentimen
+        ORDER BY a.nama_aplikasi, m.nama_model
+        """
+    )
+    if df.empty:
+        return df
+    df["aktual"] = df["aktual"].str.strip().str.title()
+    df["prediksi"] = df["prediksi"].str.strip().str.title()
+    return df
+
+
+def hitung_metrik(cm: dict) -> dict:
+    """Hitung accuracy, precision, recall, F1 untuk kelas positif & negatif."""
+    tp = cm.get(("Positif", "Positif"), 0)
+    fn = cm.get(("Positif", "Negatif"), 0)
+    fp = cm.get(("Negatif", "Positif"), 0)
+    tn = cm.get(("Negatif", "Negatif"), 0)
+    total = tp + fn + fp + tn
+    acc = (tp + tn) / total if total else 0.0
+
+    def _prf(tp_, fp_, fn_):
+        prec = tp_ / (tp_ + fp_) if (tp_ + fp_) else 0.0
+        rec = tp_ / (tp_ + fn_) if (tp_ + fn_) else 0.0
+        f1 = 2 * prec * rec / (prec + rec) if (prec + rec) else 0.0
+        return prec, rec, f1
+
+    p_pos, r_pos, f1_pos = _prf(tp, fp, fn)
+    p_neg, r_neg, f1_neg = _prf(tn, fn, fp)
+    macro_f1 = (f1_pos + f1_neg) / 2
+    return {
+        "tp": tp, "fp": fp, "fn": fn, "tn": tn,
+        "accuracy": acc,
+        "precision_pos": p_pos, "recall_pos": r_pos, "f1_pos": f1_pos,
+        "precision_neg": p_neg, "recall_neg": r_neg, "f1_neg": f1_neg,
+        "macro_f1": macro_f1,
+    }
 
 
 @st.cache_data(ttl=300, show_spinner=False)
-def rentang_tanggal(aplikasi: str) -> tuple[date, date]:
-    """Ambil rentang tanggal data untuk aplikasi tertentu."""
-    idm = model_terbaru_id()
+def performa_semua() -> pd.DataFrame:
+    df = metrik_model()
+    if df.empty:
+        return df
+    baris = []
+    for (app, model), grup in df.groupby(["aplikasi", "model"]):
+        cm = {(a, p): int(n) for a, p, n in zip(grup["aktual"], grup["prediksi"], grup["n"])}
+        hasil = hitung_metrik(cm)
+        baris.append({"aplikasi": app, "model": model, **hasil})
+    return pd.DataFrame(baris)
+
+
+@st.cache_data(ttl=300, show_spinner=False)
+def rentang_tanggal(aplikasi: str) -> tuple:
     if aplikasi == "Semua":
-        sql = """
+        df = kueri(
+            """
             SELECT MIN(w.tanggal) AS mn, MAX(w.tanggal) AS mx
             FROM fact_sentimen f
             JOIN dim_waktu w ON w.id_waktu = f.id_waktu
-            WHERE f.id_model = %s
-        """
-        df = kueri(sql, (idm,))
+            """
+        )
     else:
-        sql = """
+        df = kueri(
+            """
             SELECT MIN(w.tanggal) AS mn, MAX(w.tanggal) AS mx
             FROM fact_sentimen f
             JOIN dim_waktu w ON w.id_waktu = f.id_waktu
             JOIN dim_aplikasi a ON a.id_aplikasi = f.id_aplikasi
-            WHERE f.id_model = %s AND a.nama = %s
-        """
-        df = kueri(sql, (idm, aplikasi))
-    mn, mx = df.iloc[0]["mn"], df.iloc[0]["mx"]
-    return mn, mx
+            WHERE a.nama_aplikasi = %s
+            """,
+            (aplikasi,),
+        )
+    return df.iloc[0]["mn"], df.iloc[0]["mx"]
 
 
 @st.cache_data(ttl=300, show_spinner=False)
-def sentimen_tersaring(aplikasi: str, dari: date | None, sampai: date | None) -> pd.DataFrame:
-    """Hitung sentimen per aplikasi, boleh disaring selang waktu."""
-    idm = model_terbaru_id()
-    kondisi_app = "" if aplikasi == "Semua" else "AND a.nama = %s"
-    param_app: tuple = () if aplikasi == "Semua" else (aplikasi,)
+def sentimen_tersaring(aplikasi: str, dari, sampai) -> pd.DataFrame:
+    kondisi_app = "" if aplikasi == "Semua" else "AND a.nama_aplikasi = %s"
+    param_app = () if aplikasi == "Semua" else (aplikasi,)
     if dari and sampai:
         sql = f"""
-            SELECT a.nama AS aplikasi, s.nama AS label, COUNT(*) AS jumlah
+            SELECT a.nama_aplikasi AS aplikasi,
+                   s.label_sentimen AS label,
+                   COUNT(*) AS jumlah
             FROM fact_sentimen f
             JOIN dim_aplikasi a ON a.id_aplikasi = f.id_aplikasi
             JOIN dim_sentimen s ON s.id_sentimen = f.id_sentimen
             JOIN dim_waktu w ON w.id_waktu = f.id_waktu
-            WHERE f.id_model = %s AND w.tanggal BETWEEN %s AND %s {kondisi_app}
-            GROUP BY a.nama, s.nama
-            ORDER BY a.nama, s.nama
+            WHERE w.tanggal BETWEEN %s AND %s {kondisi_app}
+            GROUP BY a.nama_aplikasi, s.label_sentimen
+            ORDER BY a.nama_aplikasi, s.label_sentimen
         """
-        return kueri(sql, (idm, dari, sampai) + param_app)
-    sql = f"""
-        SELECT a.nama AS aplikasi, s.nama AS label, COUNT(*) AS jumlah
-        FROM fact_sentimen f
-        JOIN dim_aplikasi a ON a.id_aplikasi = f.id_aplikasi
-        JOIN dim_sentimen s ON s.id_sentimen = f.id_sentimen
-        WHERE f.id_model = %s {kondisi_app}
-        GROUP BY a.nama, s.nama
-        ORDER BY a.nama, s.nama
-    """
-    return kueri(sql, (idm,) + param_app)
+        df = kueri(sql, (dari, sampai) + param_app)
+    else:
+        sql = f"""
+            SELECT a.nama_aplikasi AS aplikasi,
+                   s.label_sentimen AS label,
+                   COUNT(*) AS jumlah
+            FROM fact_sentimen f
+            JOIN dim_aplikasi a ON a.id_aplikasi = f.id_aplikasi
+            JOIN dim_sentimen s ON s.id_sentimen = f.id_sentimen
+            WHERE 1 = 1 {kondisi_app}
+            GROUP BY a.nama_aplikasi, s.label_sentimen
+            ORDER BY a.nama_aplikasi, s.label_sentimen
+        """
+        df = kueri(sql, param_app)
+    if not df.empty:
+        df["label"] = df["label"].str.strip().str.title()
+    return df
 
 
 @st.cache_data(ttl=60, show_spinner=False)
 def riwayat_unggahan() -> pd.DataFrame:
-    """Ambil riwayat unggahan Admin."""
     try:
         return kueri(
             """
-            SELECT r.id, r.waktu, u.username, a.nama AS aplikasi,
-                   r.berkas, r.jumlah_baris, r.status, r.catatan
+            SELECT r.id, r.waktu, u.username, r.aplikasi, r.berkas,
+                   r.jumlah_baris, r.status, r.catatan
             FROM riwayat_pelatihan r
             JOIN users u ON u.id_user = r.id_user
-            JOIN dim_aplikasi a ON a.id_aplikasi = r.id_aplikasi
             ORDER BY r.waktu DESC
             LIMIT 50
             """
@@ -282,8 +341,8 @@ def kartu_metrik(label: str, nilai: str, sub: str = "", warna: str = HD) -> None
 
 def grafik_distribusi(data: dict) -> None:
     rincian = data["rincian"]
-    pos_total = int(rincian[rincian["label"].str.lower() == "positif"]["jumlah"].sum())
-    neg_total = int(rincian[rincian["label"].str.lower() == "negatif"]["jumlah"].sum())
+    pos_total = int(rincian[rincian["label"] == "Positif"]["jumlah"].sum())
+    neg_total = int(rincian[rincian["label"] == "Negatif"]["jumlah"].sum())
     fig = go.Figure(
         data=[
             go.Pie(
@@ -296,16 +355,12 @@ def grafik_distribusi(data: dict) -> None:
             )
         ]
     )
-    fig.update_layout(
-        margin=dict(l=0, r=0, t=10, b=10),
-        height=320,
-        showlegend=False,
-    )
+    fig.update_layout(margin=dict(l=0, r=0, t=10, b=10), height=320, showlegend=False)
     st.plotly_chart(fig, use_container_width=True)
 
 
 # ---------------------------------------------------------------------------
-# Halaman: Ringkasan Insight Utama
+# Halaman: Ringkasan
 # ---------------------------------------------------------------------------
 def halaman_ringkasan() -> None:
     st.header("Ringkasan Insight Utama")
@@ -330,29 +385,28 @@ def halaman_ringkasan() -> None:
     grafik_distribusi(data)
 
     st.markdown("### Insight Utama")
-    # Hitung aplikasi dengan sentimen positif tertinggi
     rincian = data["rincian"]
-    pos_app = (
-        rincian[rincian["label"].str.lower() == "positif"]
-        .merge(
-            rincian.groupby("aplikasi")["jumlah"].sum().reset_index().rename(
-                columns={"jumlah": "total_app"}
-            ),
-            on="aplikasi",
-        )
-    )
+    pos_app = rincian[rincian["label"] == "Positif"].copy()
     pos_app["pct"] = pos_app["jumlah"] / pos_app["total_app"] * 100
-    terbaik = pos_app.sort_values("pct", ascending=False).iloc[0]
-    data_terakhir = kueri(
-        "SELECT MAX(w.tanggal) AS mx FROM fact_sentimen f JOIN dim_waktu w ON w.id_waktu = f.id_waktu"
-    ).iloc[0]["mx"]
+    if not pos_app.empty:
+        terbaik = pos_app.sort_values("pct", ascending=False).iloc[0]
+        st.markdown(
+            f"- **{terbaik['aplikasi']}** memiliki sentimen positif tertinggi "
+            f"({terbaik['pct']:.1f}%).".replace(".", ",")
+        )
     st.markdown(
-        f"""
-        - **{terbaik['aplikasi']}** memiliki sentimen positif tertinggi ({terbaik['pct']:.1f}%).
-        - Pada ketiga aplikasi, model SVM memberikan macro-F1 yang lebih tinggi dibanding Naive Bayes.
-        - Data terbaru: **{data_terakhir.strftime('%d %B %Y')}**.
-        """
+        "- Pada ketiga aplikasi, model SVM memberikan macro-F1 yang lebih tinggi dibanding Naive Bayes."
     )
+    try:
+        tgl_terakhir = kueri(
+            "SELECT MAX(w.tanggal) AS mx FROM fact_sentimen f JOIN dim_waktu w ON w.id_waktu = f.id_waktu"
+        ).iloc[0]["mx"]
+        if pd.notna(tgl_terakhir):
+            st.markdown(
+                f"- Data terbaru: **{tgl_terakhir.strftime('%d %B %Y')}**."
+            )
+    except Exception:
+        pass
 
 
 # ---------------------------------------------------------------------------
@@ -361,38 +415,26 @@ def halaman_ringkasan() -> None:
 def halaman_sentimen() -> None:
     st.header("Perbandingan Sentimen")
     data = ringkasan_global()
-
     col1, col2, col3 = st.columns([2, 1, 1])
     with col1:
         aplikasi = st.selectbox(
-            "Aplikasi",
-            ["Semua"] + data["aplikasi"],
-            index=0,
-            key="filter_sentimen_app",
+            "Aplikasi", ["Semua"] + data["aplikasi"], index=0, key="filter_sentimen_app"
         )
     mn, mx = rentang_tanggal(aplikasi)
     with col2:
         dari = st.date_input(
-            "Dari",
-            value=None,
-            min_value=mn,
-            max_value=mx,
-            key="filter_sentimen_dari",
-            format="DD/MM/YYYY",
+            "Dari", value=None, min_value=mn, max_value=mx,
+            key="filter_sentimen_dari", format="DD/MM/YYYY",
         )
     with col3:
         sampai = st.date_input(
-            "Sampai",
-            value=None,
-            min_value=mn,
-            max_value=mx,
-            key="filter_sentimen_sampai",
-            format="DD/MM/YYYY",
+            "Sampai", value=None, min_value=mn, max_value=mx,
+            key="filter_sentimen_sampai", format="DD/MM/YYYY",
         )
-    st.caption(
-        f"Data tersedia pada rentang **{mn.strftime('%d %b %Y')} – {mx.strftime('%d %b %Y')}**."
-    )
-
+    if mn and mx:
+        st.caption(
+            f"Data tersedia pada rentang **{mn.strftime('%d %b %Y')} – {mx.strftime('%d %b %Y')}**."
+        )
     if dari and sampai and dari > sampai:
         st.error("Tanggal 'Dari' tidak boleh lebih besar dari 'Sampai'.")
         return
@@ -412,29 +454,18 @@ def halaman_sentimen() -> None:
 
     st.subheader("Persentase Sentimen per Aplikasi")
     melt = pivot.reset_index().melt(
-        id_vars="aplikasi",
-        value_vars=["Positif %", "Negatif %"],
-        var_name="Sentimen",
-        value_name="Persentase",
+        id_vars="aplikasi", value_vars=["Positif %", "Negatif %"],
+        var_name="Sentimen", value_name="Persentase",
     )
     melt["Sentimen"] = melt["Sentimen"].str.replace(" %", "")
     fig = px.bar(
-        melt,
-        x="Persentase",
-        y="aplikasi",
-        color="Sentimen",
-        orientation="h",
-        color_discrete_map={"Positif": POS, "Negatif": NEG},
-        text="Persentase",
+        melt, x="Persentase", y="aplikasi", color="Sentimen", orientation="h",
+        color_discrete_map={"Positif": POS, "Negatif": NEG}, text="Persentase",
     )
     fig.update_traces(texttemplate="%{text:.1f}%", textposition="inside")
     fig.update_layout(
-        xaxis=dict(range=[0, 100], title=""),
-        yaxis=dict(title=""),
-        barmode="stack",
-        height=260,
-        margin=dict(l=10, r=10, t=30, b=10),
-        legend_title="",
+        xaxis=dict(range=[0, 100], title=""), yaxis=dict(title=""),
+        barmode="stack", height=260, margin=dict(l=10, r=10, t=30, b=10), legend_title="",
     )
     st.plotly_chart(fig, use_container_width=True)
 
@@ -456,7 +487,7 @@ def halaman_performa() -> None:
     perf = performa_semua()
     if perf.empty:
         st.info(
-            "Metrik performa belum tersedia. Pastikan tabel dim_model telah terisi hasil evaluasi."
+            "Metrik performa belum tersedia. Pastikan fact_sentimen memiliki data_uji dan id_sentimen_prediksi."
         )
         return
     sub = perf[perf["aplikasi"] == aplikasi].sort_values("model")
@@ -466,24 +497,17 @@ def halaman_performa() -> None:
 
     st.subheader("Macro-F1 (data uji)")
     fig = px.bar(
-        sub,
-        x="macro_f1",
-        y="model",
-        orientation="h",
-        color="model",
-        color_discrete_map={"Naive Bayes": "#2A79D6", "SVM": "#1B4F8A"},
+        sub, x="macro_f1", y="model", orientation="h", color="model",
+        color_discrete_map={"Naive Bayes": "#2A79D6", "SVM": "#1B4F8A",
+                            "Complement Naive Bayes": "#2A79D6"},
         text="macro_f1",
     )
     fig.update_traces(texttemplate="%{text:.4f}", textposition="outside")
     fig.update_layout(
-        xaxis=dict(range=[0, 1], title=""),
-        yaxis=dict(title=""),
-        showlegend=False,
-        height=220,
-        margin=dict(l=10, r=10, t=30, b=10),
+        xaxis=dict(range=[0, 1], title=""), yaxis=dict(title=""),
+        showlegend=False, height=220, margin=dict(l=10, r=10, t=30, b=10),
     )
     st.plotly_chart(fig, use_container_width=True)
-
     terbaik = sub.sort_values("macro_f1", ascending=False).iloc[0]["model"]
     st.success(f"Model terbaik untuk {aplikasi}: **{terbaik}**")
 
@@ -508,17 +532,14 @@ def halaman_performa() -> None:
 
     st.subheader(f"Confusion Matrix ({terbaik})")
     bar_terbaik = sub[sub["model"] == terbaik].iloc[0]
-    if pd.notna(bar_terbaik.get("tp")):
-        cm_df = pd.DataFrame(
-            [
-                ["Aktual Positif", int(bar_terbaik["tp"]), int(bar_terbaik["fn"])],
-                ["Aktual Negatif", int(bar_terbaik["fp"]), int(bar_terbaik["tn"])],
-            ],
-            columns=["", "Prediksi Positif", "Prediksi Negatif"],
-        )
-        st.table(cm_df)
-    else:
-        st.caption("Confusion matrix belum tersedia pada tabel dim_model.")
+    cm_df = pd.DataFrame(
+        [
+            ["Aktual Positif", int(bar_terbaik["tp"]), int(bar_terbaik["fn"])],
+            ["Aktual Negatif", int(bar_terbaik["fp"]), int(bar_terbaik["tn"])],
+        ],
+        columns=["", "Prediksi Positif", "Prediksi Negatif"],
+    )
+    st.table(cm_df)
 
 
 # ---------------------------------------------------------------------------
@@ -551,16 +572,17 @@ def halaman_admin(user: dict) -> None:
         return
     for _, baris in riwayat.iterrows():
         kolom = st.columns([2, 2, 2, 3, 2, 1])
-        kolom[0].write(baris["waktu"].strftime("%d %b %Y %H:%M") if pd.notna(baris["waktu"]) else "-")
+        kolom[0].write(
+            baris["waktu"].strftime("%d %b %Y %H:%M") if pd.notna(baris["waktu"]) else "-"
+        )
         kolom[1].write(baris["aplikasi"])
         kolom[2].write(baris["username"])
         kolom[3].write(baris["berkas"] or "-")
         kolom[4].write(
             f"{int(baris['jumlah_baris']):,} ulasan".replace(",", ".")
-            if pd.notna(baris["jumlah_baris"])
-            else "-"
+            if pd.notna(baris["jumlah_baris"]) else "-"
         )
-        if baris["status"] == "Diterima":
+        if baris["status"] not in ("Dibatalkan",):
             if kolom[5].button("Batal", key=f"batal_{baris['id']}"):
                 batalkan_unggahan(int(baris["id"]))
                 ringkasan_global.clear()
@@ -571,12 +593,7 @@ def halaman_admin(user: dict) -> None:
 
 
 def proses_unggahan(user: dict, aplikasi: str, berkas) -> None:
-    """Validasi berkas unggahan Admin dan simpan sebagai pending.
-
-    Catatan: logika pelabelan hybrid dan prediksi model dijalankan terpisah
-    oleh skrip pipeline Python pada perangkat peneliti. Fungsi ini hanya
-    menerima dan memvalidasi berkas serta mencatat ke riwayat_pelatihan.
-    """
+    """Validasi berkas Admin dan simpan sebagai pending di riwayat_pelatihan."""
     try:
         if berkas.name.lower().endswith(".csv"):
             df = pd.read_csv(berkas)
@@ -585,8 +602,9 @@ def proses_unggahan(user: dict, aplikasi: str, berkas) -> None:
     except Exception as exc:
         st.error(f"Berkas tidak dapat dibaca: {exc}")
         return
+    kolom_rendah = [c.lower() for c in df.columns]
     wajib = {"content", "score", "at"}
-    hilang = wajib - set(df.columns.str.lower())
+    hilang = wajib - set(kolom_rendah)
     if hilang:
         st.error(f"Kolom wajib tidak lengkap: {', '.join(sorted(hilang))}.")
         return
@@ -594,21 +612,17 @@ def proses_unggahan(user: dict, aplikasi: str, berkas) -> None:
         st.error(f"Jumlah baris ({len(df)}) melebihi batas 2.000 ulasan per unggahan.")
         return
     try:
-        id_app_df = kueri(
-            "SELECT id_aplikasi FROM dim_aplikasi WHERE nama = %s", (aplikasi,)
-        )
-        id_app = int(id_app_df.iloc[0]["id_aplikasi"])
         eksekusi(
             """
-            INSERT INTO riwayat_pelatihan (waktu, id_user, id_aplikasi, berkas, jumlah_baris, status, catatan)
+            INSERT INTO riwayat_pelatihan (waktu, id_user, aplikasi, berkas, jumlah_baris, status, catatan)
             VALUES (NOW(), %s, %s, %s, %s, 'Pending', %s)
             """,
             (
                 user["id_user"],
-                id_app,
+                aplikasi,
                 berkas.name,
                 len(df),
-                f"Menunggu pemrosesan oleh skrip pipeline",
+                "Menunggu pemrosesan oleh skrip pipeline peneliti",
             ),
         )
         st.success(
@@ -642,7 +656,6 @@ def halaman_login() -> None:
         "<p style='text-align:center;color:#666;'>Instagram · TikTok · X</p>",
         unsafe_allow_html=True,
     )
-
     tab_masuk, tab_daftar = st.tabs(["Masuk", "Daftar"])
     with tab_masuk:
         with st.form("form_masuk", clear_on_submit=False):
