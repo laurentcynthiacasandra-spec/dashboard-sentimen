@@ -147,8 +147,8 @@ st.markdown(
 
     /* Tombol */
     .stButton > button {{border-radius: 8px; font-weight: 600;}}
-    .stButton > button[kind="primary"] {{background: {HD}; border-color: {HD};}}
-    .stButton > button[kind="primary"]:hover {{background: {HD_DARK}; border-color: {HD_DARK};}}
+    .stButton > button[kind="primary"], .stButton > button[data-testid="baseButton-primary"], .stForm button[kind="primaryFormSubmit"] {{background-color: {HD} !important; border-color: {HD} !important; color: white !important;}}
+    .stButton > button[kind="primary"]:hover, .stForm button[kind="primaryFormSubmit"]:hover {{background-color: {HD_DARK} !important; border-color: {HD_DARK} !important;}}
 
     /* Radio pill (filter aplikasi) */
     div[role="radiogroup"] {{
@@ -194,33 +194,80 @@ def _get_dsn() -> str:
         return os.environ["DATABASE_URL"]
 
 
-@st.cache_resource
-def get_conn():
+def _buat_koneksi():
     return psycopg2.connect(_get_dsn(), sslmode="require")
 
 
+def get_conn():
+    """Ambil koneksi dari session_state, buat baru bila belum ada atau sudah tutup."""
+    conn = st.session_state.get("_db_conn")
+    if conn is None or getattr(conn, "closed", 1):
+        conn = _buat_koneksi()
+        st.session_state["_db_conn"] = conn
+    else:
+        # Cek kesehatan dengan ping sederhana; reconnect jika gagal
+        try:
+            with conn.cursor() as cur:
+                cur.execute("SELECT 1")
+                cur.fetchone()
+        except Exception:
+            try:
+                conn.close()
+            except Exception:
+                pass
+            conn = _buat_koneksi()
+            st.session_state["_db_conn"] = conn
+    return conn
+
+
 def kueri(sql: str, params: tuple = ()) -> pd.DataFrame:
-    conn = get_conn()
-    try:
-        with conn.cursor() as cur:
-            cur.execute(sql, params)
-            cols = [d[0] for d in cur.description]
-            data = cur.fetchall()
-        return pd.DataFrame(data, columns=cols)
-    except Exception:
-        conn.rollback()
-        raise
+    for percobaan in range(2):
+        conn = get_conn()
+        try:
+            with conn.cursor() as cur:
+                cur.execute(sql, params)
+                cols = [d[0] for d in cur.description]
+                data = cur.fetchall()
+            return pd.DataFrame(data, columns=cols)
+        except (psycopg2.InterfaceError, psycopg2.OperationalError):
+            try:
+                conn.close()
+            except Exception:
+                pass
+            st.session_state.pop("_db_conn", None)
+            if percobaan == 1:
+                raise
+        except Exception:
+            try:
+                conn.rollback()
+            except Exception:
+                pass
+            raise
+    return pd.DataFrame()
 
 
 def eksekusi(sql: str, params: tuple = ()) -> None:
-    conn = get_conn()
-    try:
-        with conn.cursor() as cur:
-            cur.execute(sql, params)
-        conn.commit()
-    except Exception:
-        conn.rollback()
-        raise
+    for percobaan in range(2):
+        conn = get_conn()
+        try:
+            with conn.cursor() as cur:
+                cur.execute(sql, params)
+            conn.commit()
+            return
+        except (psycopg2.InterfaceError, psycopg2.OperationalError):
+            try:
+                conn.close()
+            except Exception:
+                pass
+            st.session_state.pop("_db_conn", None)
+            if percobaan == 1:
+                raise
+        except Exception:
+            try:
+                conn.rollback()
+            except Exception:
+                pass
+            raise
 
 
 # ---------------------------------------------------------------------------
