@@ -16,17 +16,21 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-HD = "#175A85"
-HD_DARK = "#0F3F5E"
-POS = "#3F8A1E"
-NEG = "#D94545"
-MUTED = "#6B7A8F"
-BORDER = "#E5DED9"
+# Palet warna modern
+HD = "#1E5A8A"
+HD_DARK = "#0A3B5E"
+HD_LIGHT = "#E8F0F7"
+ACCENT = "#F59E0B"
+POS = "#10B981"
+NEG = "#EF4444"
+MUTED = "#64748B"
+BG = "#F8FAFC"
+CARD_BG = "#FFFFFF"
+BORDER = "#E2E8F0"
 IG_COLOR = "#8B5CF6"
 TT_COLOR = "#14B8A6"
 X_COLOR = "#1E3A5F"
 
-# Waktu latih model (detik) — dari hasil training sebelumnya
 WAKTU_LATIH = {
     ("Instagram", "Naive Bayes"): 0.4, ("Instagram", "SVM"): 57.5,
     ("Instagram", "Naive Bayes (Complement)"): 0.4, ("Instagram", "SVM (kernel linear)"): 57.5,
@@ -44,123 +48,258 @@ def warna_aplikasi(nama: str) -> str:
     return X_COLOR
 
 
-# CSS
+# CSS modern
 st.markdown(
     """
     <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+
+    html, body, [data-testid="stAppViewContainer"] * {
+        font-family: 'Inter', -apple-system, sans-serif !important;
+    }
     header, footer, #MainMenu {visibility: hidden;}
-    .stApp {background: #F4F0EE;}
-    .block-container {padding-top: 1.5rem !important; padding-bottom: 2.5rem; max-width: 1400px !important;}
+    .stApp {background: #F8FAFC;}
+    .block-container {padding-top: 1.2rem !important; padding-bottom: 2.5rem; max-width: 1400px !important;}
 
-    [data-testid="stSidebar"] {background: #FFFFFF; border-right: 1px solid #E5DED9;}
-    [data-testid="stSidebar"] > div {padding-top: 1rem;}
-
+    /* Sidebar modern */
+    [data-testid="stSidebar"] {
+        background: #FFFFFF;
+        border-right: 1px solid #E2E8F0;
+    }
+    [data-testid="stSidebar"] > div {padding-top: 1.2rem;}
     .sidebar-brand {
-        color: #175A85; font-weight: 700; font-size: 1.1rem;
-        padding: 0.4rem 0.4rem 1rem 0.4rem; border-bottom: 1px solid #E5DED9;
-        margin-bottom: 0.6rem;
+        display: flex; align-items: center; gap: 0.5rem;
+        color: #1E5A8A; font-weight: 700; font-size: 1.05rem;
+        padding: 0.4rem 0.6rem 1rem 0.6rem;
+        border-bottom: 1px solid #E2E8F0;
+        margin-bottom: 0.8rem;
+    }
+    .sidebar-brand-icon {
+        width: 32px; height: 32px; border-radius: 8px;
+        background: linear-gradient(135deg, #1E5A8A 0%, #0A3B5E 100%);
+        display: flex; align-items: center; justify-content: center;
+        color: white; font-size: 1.1rem;
     }
 
+    /* Sidebar nav vertical pill */
     [data-testid="stSidebar"] .stRadio > div[role="radiogroup"] {
-        display: flex; flex-direction: column; gap: 4px; padding: 0;
+        display: flex; flex-direction: column; gap: 3px; padding: 0;
     }
     [data-testid="stSidebar"] .stRadio > div[role="radiogroup"] > label {
         background: transparent !important; border: none !important;
-        padding: 0.6rem 0.9rem !important; border-radius: 6px !important;
-        margin: 0 !important; cursor: pointer; font-weight: 500;
-        color: #333 !important;
+        padding: 0.65rem 1rem !important; border-radius: 8px !important;
+        margin: 0 !important; cursor: pointer;
+        font-weight: 500; font-size: 0.92rem;
+        color: #334155 !important;
+        transition: all 0.15s ease;
     }
-    [data-testid="stSidebar"] .stRadio > div[role="radiogroup"] > label:hover {background: #F4F0EE !important;}
+    [data-testid="stSidebar"] .stRadio > div[role="radiogroup"] > label:hover {
+        background: #F1F5F9 !important;
+    }
     [data-testid="stSidebar"] .stRadio > div[role="radiogroup"] > label:has(input:checked) {
-        background: #175A85 !important; color: white !important;
+        background: linear-gradient(135deg, #1E5A8A 0%, #0A3B5E 100%) !important;
+        color: white !important;
+        box-shadow: 0 2px 8px rgba(30,90,138,0.25);
     }
     [data-testid="stSidebar"] .stRadio > div[role="radiogroup"] > label > div:first-child {display: none !important;}
     [data-testid="stSidebar"] .stRadio > div[role="radiogroup"] > label > div:last-child p {color: inherit !important; margin: 0;}
 
+    /* Main radio pill */
     .main .stRadio > div[role="radiogroup"] {gap: 6px; flex-wrap: wrap; margin-bottom: 0.3rem;}
     .main .stRadio > div[role="radiogroup"] > label {
-        background: #FFFFFF !important; border: 1px solid #E5DED9 !important;
-        padding: 0.4rem 1.1rem !important; border-radius: 20px !important;
+        background: #FFFFFF !important; border: 1px solid #E2E8F0 !important;
+        padding: 0.45rem 1.2rem !important; border-radius: 24px !important;
         margin: 0 !important; cursor: pointer; font-weight: 500;
-        color: #6B7A8F !important;
+        color: #64748B !important; font-size: 0.88rem;
     }
-    .main .stRadio > div[role="radiogroup"] > label:hover {background: #F8F5F3 !important;}
+    .main .stRadio > div[role="radiogroup"] > label:hover {
+        background: #F1F5F9 !important; border-color: #CBD5E1 !important;
+    }
     .main .stRadio > div[role="radiogroup"] > label:has(input:checked) {
-        background: #175A85 !important; color: white !important; border-color: #175A85 !important;
+        background: #1E5A8A !important; color: white !important; border-color: #1E5A8A !important;
     }
     .main .stRadio > div[role="radiogroup"] > label > div:first-child {display: none !important;}
     .main .stRadio > div[role="radiogroup"] > label > div:last-child p {color: inherit !important; margin: 0;}
 
-    .page-title {color: #0F3F5E; font-size: 1.7rem; font-weight: 700; margin: 0 0 1rem 0;}
+    /* Judul halaman */
+    .page-title {
+        color: #0A3B5E; font-size: 1.75rem; font-weight: 700;
+        margin: 0 0 0.3rem 0; letter-spacing: -0.02em;
+    }
+    .page-subtitle {
+        color: #64748B; font-size: 0.95rem; margin-bottom: 1.2rem;
+    }
 
+    /* Kartu metrik kecil */
     .metrik-kecil {
-        background: #FFFFFF; padding: 0.7rem 0.9rem;
-        border-radius: 8px; border: 1px solid #E5DED9;
-        border-top: 3px solid #175A85;
+        background: #FFFFFF; padding: 1rem 1.1rem;
+        border-radius: 12px; border: 1px solid #E2E8F0;
+        transition: all 0.2s ease;
+        position: relative; overflow: hidden;
     }
-    .metrik-kecil-label {color: #6B7A8F; font-size: 0.72rem; font-weight: 600;}
-    .metrik-kecil-nilai {font-size: 1.3rem; font-weight: 700; color: #0F3F5E; margin-top: 0.15rem; line-height: 1.1;}
-    .metrik-kecil-sub {color: #6B7A8F; font-size: 0.72rem; margin-top: 0.1rem;}
+    .metrik-kecil::before {
+        content: ''; position: absolute; top: 0; left: 0;
+        width: 100%; height: 3px;
+        background: linear-gradient(90deg, #1E5A8A, #3B82F6);
+    }
+    .metrik-kecil:hover {
+        box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+        transform: translateY(-1px);
+    }
+    .metrik-kecil-label {
+        color: #64748B; font-size: 0.73rem; font-weight: 600;
+        text-transform: uppercase; letter-spacing: 0.4px;
+    }
+    .metrik-kecil-nilai {
+        font-size: 1.5rem; font-weight: 700; color: #0A3B5E;
+        margin-top: 0.3rem; line-height: 1.1;
+    }
+    .metrik-kecil-sub {color: #94A3B8; font-size: 0.78rem; margin-top: 0.2rem;}
 
+    /* Kartu per aplikasi */
     .kartu-app {
-        background: #FFFFFF; padding: 1.2rem 1.3rem;
-        border-radius: 10px; border: 1px solid #E5DED9;
-        box-shadow: 0 1px 4px rgba(0,0,0,0.04); min-height: 230px;
+        background: #FFFFFF; padding: 1.3rem;
+        border-radius: 12px; border: 1px solid #E2E8F0;
+        transition: all 0.2s ease; min-height: 240px;
+        position: relative; overflow: hidden;
     }
-    .kartu-app-nama {font-size: 1.5rem; font-weight: 700; margin: 0;}
-    .kartu-app-pct {font-size: 2.4rem; font-weight: 700; margin: 0.8rem 0 0.1rem 0; line-height: 1;}
-    .kartu-app-pos {color: #6B7A8F; font-size: 0.95rem; font-weight: 500; margin-bottom: 0.7rem;}
-    .mini-bar {display: flex; width: 100%; height: 10px; border-radius: 4px; overflow: hidden; margin-bottom: 0.7rem;}
-    .kartu-app-stat {color: #6B7A8F; font-size: 0.82rem;}
+    .kartu-app::before {
+        content: ''; position: absolute; top: 0; left: 0;
+        width: 4px; height: 100%;
+    }
+    .kartu-app.ig::before {background: #8B5CF6;}
+    .kartu-app.tt::before {background: #14B8A6;}
+    .kartu-app.x::before {background: #1E3A5F;}
+    .kartu-app:hover {box-shadow: 0 6px 20px rgba(0,0,0,0.06); transform: translateY(-2px);}
+    .kartu-app-nama {font-size: 1.4rem; font-weight: 700; margin: 0;}
+    .kartu-app-pct {font-size: 2.6rem; font-weight: 800; margin: 0.9rem 0 0.1rem 0; line-height: 1; letter-spacing: -0.02em;}
+    .kartu-app-pos {color: #64748B; font-size: 0.9rem; font-weight: 500; margin-bottom: 0.8rem;}
+    .mini-bar {display: flex; width: 100%; height: 10px; border-radius: 5px; overflow: hidden; margin-bottom: 0.7rem; background: #F1F5F9;}
+    .kartu-app-stat {color: #64748B; font-size: 0.8rem; line-height: 1.5;}
 
+    /* Kartu umum */
     .kartu {
-        background: #FFFFFF; padding: 1.1rem 1.3rem;
-        border-radius: 8px; border: 1px solid #E5DED9;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.03);
+        background: #FFFFFF; padding: 1.3rem;
+        border-radius: 12px; border: 1px solid #E2E8F0;
         margin-bottom: 1rem;
     }
-    .kartu-judul {color: #0F3F5E; font-weight: 700; font-size: 1.05rem; margin-bottom: 0.7rem;}
+    .kartu-judul {
+        color: #0A3B5E; font-weight: 700; font-size: 1.05rem;
+        margin-bottom: 1rem; letter-spacing: -0.01em;
+    }
 
-    .insight {display: flex; gap: 0.6rem; padding: 0.3rem 0; align-items: flex-start;}
-    .insight-dot {width: 7px; height: 7px; border-radius: 50%; background: #175A85; margin-top: 0.5rem; flex-shrink: 0;}
-    .insight-text {font-size: 0.92rem; color: #333; line-height: 1.5;}
+    /* Insight bullets */
+    .insight {display: flex; gap: 0.7rem; padding: 0.4rem 0; align-items: flex-start;}
+    .insight-dot {
+        width: 8px; height: 8px; border-radius: 50%;
+        background: linear-gradient(135deg, #1E5A8A, #3B82F6);
+        margin-top: 0.5rem; flex-shrink: 0;
+    }
+    .insight-text {font-size: 0.93rem; color: #334155; line-height: 1.6;}
 
-    /* Banner kuning untuk insight Perbandingan */
+    /* Banner insight kuning */
     .banner-insight {
-        background: #FFF7E0; border: 1px solid #F0D890;
-        color: #5F4B00; padding: 0.9rem 1.1rem;
-        border-radius: 8px; margin: 1rem 0;
+        background: linear-gradient(135deg, #FEF9E7 0%, #FFF4D0 100%);
+        border: 1px solid #FDE68A;
+        color: #78350F; padding: 1rem 1.2rem;
+        border-radius: 10px; margin: 1rem 0;
         font-size: 0.93rem;
     }
-    .banner-insight b {color: #0F3F5E;}
+    .banner-insight b {color: #0A3B5E;}
 
     /* Info box biru */
     .info-biru {
-        background: #E8F1F7; border: 1px solid #B9D4E6;
-        color: #0F3F5E; padding: 0.9rem 1.1rem;
-        border-radius: 8px; margin: 1rem 0; font-size: 0.92rem;
+        background: #EFF6FF; border: 1px solid #BFDBFE;
+        color: #1E40AF; padding: 0.9rem 1.1rem;
+        border-radius: 10px; margin: 1rem 0; font-size: 0.92rem;
     }
 
+    /* Login modern — gradient bg, kartu floating */
+    .login-wrapper {
+        min-height: calc(100vh - 80px);
+        display: flex; align-items: center; justify-content: center;
+        padding: 2rem 1rem;
+    }
     .login-card {
-        background: #FFFFFF; padding: 2rem 1.8rem; border-radius: 12px;
-        border: 1px solid #E5DED9; box-shadow: 0 6px 24px rgba(0,0,0,0.08);
-        max-width: 480px; margin: 2.5rem auto;
+        background: #FFFFFF; padding: 2.5rem 2.2rem; border-radius: 20px;
+        box-shadow: 0 20px 50px rgba(30,90,138,0.12);
+        max-width: 440px; width: 100%; margin: 0 auto;
+        border: 1px solid #E2E8F0;
     }
-    .login-title {color: #0F3F5E; text-align: left; font-size: 2.1rem; font-weight: 800; margin: 0 0 0.3rem 0; line-height: 1.1;}
-    .login-subtitle {color: #6B7A8F; text-align: left; font-size: 0.95rem; margin-bottom: 1.4rem;}
+    .login-logo {
+        width: 60px; height: 60px; border-radius: 16px;
+        background: linear-gradient(135deg, #1E5A8A 0%, #0A3B5E 100%);
+        display: flex; align-items: center; justify-content: center;
+        color: white; font-size: 1.8rem;
+        margin: 0 auto 1rem auto;
+        box-shadow: 0 8px 20px rgba(30,90,138,0.25);
+    }
+    .login-title {
+        color: #0A3B5E; text-align: center; font-size: 1.7rem;
+        font-weight: 800; margin: 0 0 0.4rem 0; letter-spacing: -0.02em;
+    }
+    .login-subtitle {
+        color: #64748B; text-align: center; font-size: 0.92rem;
+        margin-bottom: 1.6rem;
+    }
 
-    .stButton > button {border-radius: 6px; font-weight: 600;}
+    /* Buttons */
+    .stButton > button {
+        border-radius: 8px; font-weight: 600; font-size: 0.9rem;
+        transition: all 0.15s ease;
+    }
     .stButton > button[kind="primary"],
     .stForm button[kind="primaryFormSubmit"] {
-        background-color: #175A85 !important; border-color: #175A85 !important; color: white !important;
+        background: linear-gradient(135deg, #1E5A8A 0%, #0A3B5E 100%) !important;
+        border: none !important; color: white !important;
+        box-shadow: 0 2px 8px rgba(30,90,138,0.2);
     }
     .stButton > button[kind="primary"]:hover,
     .stForm button[kind="primaryFormSubmit"]:hover {
-        background-color: #0F3F5E !important; border-color: #0F3F5E !important;
+        background: linear-gradient(135deg, #0A3B5E 0%, #062843 100%) !important;
+        box-shadow: 0 4px 14px rgba(30,90,138,0.3);
+        transform: translateY(-1px);
     }
 
-    .stTable thead tr th {background: #E8F1F7; color: #0F3F5E; font-weight: 700; font-size: 0.85rem;}
-    .stTable tbody tr td {font-size: 0.86rem;}
+    /* Input & selectbox modern */
+    .stTextInput input, .stSelectbox > div > div, .stDateInput input {
+        border-radius: 8px !important;
+        border: 1px solid #E2E8F0 !important;
+        font-size: 0.9rem;
+    }
+    .stTextInput input:focus {
+        border-color: #1E5A8A !important;
+        box-shadow: 0 0 0 3px rgba(30,90,138,0.1) !important;
+    }
+
+    /* Tabel st.table */
+    .stTable thead tr th {
+        background: #F1F5F9; color: #0A3B5E;
+        font-weight: 700; font-size: 0.82rem;
+        text-transform: uppercase; letter-spacing: 0.3px;
+    }
+    .stTable tbody tr td {font-size: 0.88rem; color: #334155;}
+
+    /* Streamlit tabs (login) */
+    .stTabs [data-baseweb="tab-list"] {
+        gap: 2rem; border-bottom: 1px solid #E2E8F0;
+        padding: 0;
+    }
+    .stTabs [data-baseweb="tab"] {
+        background: transparent; border: none;
+        padding: 0.6rem 0; color: #64748B;
+        font-weight: 600; font-size: 0.95rem;
+    }
+    .stTabs [aria-selected="true"] {
+        color: #1E5A8A !important;
+        border-bottom: 2px solid #1E5A8A !important;
+    }
+
+    /* Hilangkan default label jarak */
+    .stSelectbox label, .stDateInput label, .stTextInput label,
+    .stRadio > label, .stFileUploader label {
+        font-weight: 500; color: #475569; font-size: 0.85rem;
+    }
     </style>
     """,
     unsafe_allow_html=True,
@@ -438,8 +577,8 @@ def rentang_tanggal(aplikasi: str) -> tuple:
 
 
 @st.cache_data(ttl=300, show_spinner=False)
-def sentimen_bulanan(aplikasi: str, dari, sampai, tahun) -> pd.DataFrame:
-    """Jumlah ulasan positif dan negatif per bulan per aplikasi."""
+def sentimen_mingguan(aplikasi: str, dari, sampai, tahun) -> pd.DataFrame:
+    """Jumlah ulasan per minggu per aplikasi per sentimen."""
     idm = model_utama_id()
     cond = []
     parm = [idm]
@@ -452,7 +591,7 @@ def sentimen_bulanan(aplikasi: str, dari, sampai, tahun) -> pd.DataFrame:
     wh = (" AND " + " AND ".join(cond)) if cond else ""
     sql = f"""
         SELECT a.nama_aplikasi AS aplikasi,
-               TO_CHAR(DATE_TRUNC('month', w.tanggal), 'YYYY-MM') AS bulan,
+               DATE_TRUNC('week', w.tanggal)::date AS minggu,
                s.label_sentimen AS label,
                COUNT(*) AS jumlah
         FROM fact_sentimen f
@@ -460,8 +599,8 @@ def sentimen_bulanan(aplikasi: str, dari, sampai, tahun) -> pd.DataFrame:
         JOIN dim_sentimen s ON s.id_sentimen = f.id_sentimen
         JOIN dim_waktu w ON w.id_waktu = f.id_waktu
         WHERE f.id_model = %s {wh}
-        GROUP BY a.nama_aplikasi, DATE_TRUNC('month', w.tanggal), s.label_sentimen
-        ORDER BY DATE_TRUNC('month', w.tanggal)
+        GROUP BY a.nama_aplikasi, DATE_TRUNC('week', w.tanggal), s.label_sentimen
+        ORDER BY DATE_TRUNC('week', w.tanggal)
     """
     df = kueri(sql, tuple(parm))
     if not df.empty:
@@ -471,7 +610,6 @@ def sentimen_bulanan(aplikasi: str, dari, sampai, tahun) -> pd.DataFrame:
 
 @st.cache_data(ttl=300, show_spinner=False)
 def sentimen_tersaring(aplikasi: str, dari, sampai, tahun) -> pd.DataFrame:
-    """Hitung sentimen per aplikasi dengan filter."""
     idm = model_utama_id()
     cond = []
     parm = [idm]
@@ -522,19 +660,19 @@ def daftar_pengguna() -> pd.DataFrame:
 # ---------------------------------------------------------------------------
 # Komponen
 # ---------------------------------------------------------------------------
-def page_title(judul: str) -> None:
+def page_title(judul: str, subjudul: str = "") -> None:
     st.markdown(f'<div class="page-title">{judul}</div>', unsafe_allow_html=True)
+    if subjudul:
+        st.markdown(f'<div class="page-subtitle">{subjudul}</div>', unsafe_allow_html=True)
 
 
 def metrik_kecil(label: str, nilai: str, sub: str = "") -> None:
     st.markdown(
-        f"""
-        <div class="metrik-kecil">
-            <div class="metrik-kecil-label">{label}</div>
-            <div class="metrik-kecil-nilai">{nilai}</div>
-            <div class="metrik-kecil-sub">{sub or '&nbsp;'}</div>
-        </div>
-        """,
+        f'<div class="metrik-kecil">'
+        f'<div class="metrik-kecil-label">{label}</div>'
+        f'<div class="metrik-kecil-nilai">{nilai}</div>'
+        f'<div class="metrik-kecil-sub">{sub or "&nbsp;"}</div>'
+        f'</div>',
         unsafe_allow_html=True,
     )
 
@@ -546,21 +684,19 @@ def kartu_aplikasi(nama: str, positif: int, negatif: int, total: int) -> None:
     pos_str = f"{positif:,}".replace(",", ".")
     neg_str = f"{negatif:,}".replace(",", ".")
     tot_str = f"{total:,}".replace(",", ".")
+    klass = "ig" if "insta" in nama.lower() else ("tt" if "tik" in nama.lower() else "x")
     st.markdown(
-        f"""
-        <div class="kartu-app">
-            <div class="kartu-app-nama" style="color:{warna};">{nama}</div>
-            <div class="kartu-app-pct" style="color:{HD_DARK};">{pct_str}</div>
-            <div class="kartu-app-pos">positif</div>
-            <div class="mini-bar">
-                <div style="width:{pct}%; background:{POS};"></div>
-                <div style="width:{100-pct}%; background:{NEG};"></div>
-            </div>
-            <div class="kartu-app-stat">
-                {pos_str} positif · {neg_str} negatif · {tot_str} ulasan
-            </div>
-        </div>
-        """,
+        f'<div class="kartu-app {klass}">'
+        f'<div class="kartu-app-nama" style="color:{warna};">{nama}</div>'
+        f'<div class="kartu-app-pct" style="color:{HD_DARK};">{pct_str}</div>'
+        f'<div class="kartu-app-pos">positif</div>'
+        f'<div class="mini-bar">'
+        f'<div style="width:{pct}%; background:{POS};"></div>'
+        f'<div style="width:{100-pct}%; background:{NEG};"></div>'
+        f'</div>'
+        f'<div class="kartu-app-stat">'
+        f'{pos_str} positif · {neg_str} negatif · {tot_str} ulasan'
+        f'</div></div>',
         unsafe_allow_html=True,
     )
 
@@ -585,7 +721,7 @@ def banner_insight(teks_html: str) -> None:
 # Halaman: Ringkasan
 # ---------------------------------------------------------------------------
 def halaman_ringkasan() -> None:
-    page_title("Ringkasan Insight Utama")
+    page_title("Ringkasan Insight Utama", "Pantauan sentimen pengguna aplikasi media sosial")
     data = ringkasan_global()
     tgl_str = data["tanggal_terbaru"].strftime("%Y-%m-%d") if pd.notna(data["tanggal_terbaru"]) else "-"
 
@@ -620,15 +756,15 @@ def halaman_ringkasan() -> None:
             x=pos_app["pct"], y=pos_app["aplikasi"], orientation="h",
             marker_color=warna_app,
             text=pos_app["pct"].apply(lambda v: f"{v:.1f}%".replace(".", ",")),
-            textposition="outside", textfont=dict(size=12, color=HD_DARK),
+            textposition="outside", textfont=dict(size=12, color=HD_DARK, family="Inter"),
         ))
         fig.update_layout(
-            xaxis=dict(range=[0, 100], title="% positif", showgrid=True, gridcolor="#eee"),
-            yaxis=dict(title="", tickfont=dict(size=13)),
+            xaxis=dict(range=[0, 100], title="% positif", showgrid=True, gridcolor="#F1F5F9"),
+            yaxis=dict(title="", tickfont=dict(size=13, family="Inter")),
             height=280, margin=dict(l=10, r=40, t=10, b=30),
             paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
         )
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
         tutup_kartu()
 
     with col_pie:
@@ -639,16 +775,16 @@ def halaman_ringkasan() -> None:
             labels=[f"Positif ({pos_total:,})".replace(",", "."),
                     f"Negatif ({neg_total:,})".replace(",", ".")],
             values=[pos_total, neg_total],
-            marker=dict(colors=[POS, NEG], line=dict(color="white", width=2)),
-            hole=0.55, textinfo="none",
+            marker=dict(colors=[POS, NEG], line=dict(color="white", width=3)),
+            hole=0.6, textinfo="none",
         )])
         fig.update_layout(
             margin=dict(l=20, r=20, t=10, b=30), height=280,
             showlegend=True,
-            legend=dict(orientation="h", yanchor="bottom", y=-0.1, xanchor="center", x=0.5, font=dict(size=12)),
+            legend=dict(orientation="h", yanchor="bottom", y=-0.1, xanchor="center", x=0.5, font=dict(size=12, family="Inter")),
             paper_bgcolor="rgba(0,0,0,0)",
         )
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
         tutup_kartu()
 
     mulai_kartu("Insight Utama")
@@ -681,7 +817,7 @@ def halaman_ringkasan() -> None:
 # Halaman: Perbandingan Sentimen
 # ---------------------------------------------------------------------------
 def halaman_sentimen() -> None:
-    page_title("Perbandingan Sentimen")
+    page_title("Perbandingan Sentimen", "Analisis proporsi sentimen antar aplikasi dan selang waktu")
     data = ringkasan_global()
 
     mulai_kartu("Filter")
@@ -701,11 +837,7 @@ def halaman_sentimen() -> None:
 
     c5, c6, c7 = st.columns([1.5, 1.5, 1])
     with c5:
-        sumber = st.selectbox(
-            "Sumber label",
-            ["Hasil pelabelan (semua ulasan)"],
-            key="fs_sumber",
-        )
+        sumber = st.selectbox("Sumber label", ["Hasil pelabelan (semua ulasan)"], key="fs_sumber")
     with c6:
         model_opsi = ["Semua algoritma"] + daftar_model()
         model = st.selectbox("Algoritma", model_opsi, key="fs_model")
@@ -734,7 +866,6 @@ def halaman_sentimen() -> None:
     pivot["Neg_pct"] = (pivot["Negatif"] / pivot["Total"] * 100).round(1)
     pivot = pivot.reset_index()
 
-    # Banner insight
     if len(pivot) >= 2:
         tgi = pivot.sort_values("Pos_pct", ascending=False).iloc[0]
         trd = pivot.sort_values("Pos_pct", ascending=True).iloc[0]
@@ -759,59 +890,65 @@ def halaman_sentimen() -> None:
         ))
         fig.update_layout(
             barmode="stack",
-            xaxis=dict(title="", tickfont=dict(size=13)),
-            yaxis=dict(title="", range=[0, 100], ticksuffix="%", tickfont=dict(size=11),
-                       showgrid=True, gridcolor="#eee"),
-            height=360, margin=dict(l=10, r=10, t=30, b=10),
+            xaxis=dict(title="", tickfont=dict(size=13, family="Inter")),
+            yaxis=dict(title="", range=[0, 100], ticksuffix="%", tickfont=dict(size=11, family="Inter"),
+                       showgrid=True, gridcolor="#F1F5F9"),
+            height=380, margin=dict(l=10, r=10, t=30, b=10),
             legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0, title=""),
             paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
         )
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
         tutup_kartu()
 
     with col_b:
-        mulai_kartu("Tren Jumlah Ulasan per Bulan")
-        tren = sentimen_bulanan(aplikasi, dari, sampai, tahun)
+        mulai_kartu("Tren Jumlah Ulasan per Minggu")
+        tren = sentimen_mingguan(aplikasi, dari, sampai, tahun)
         if tren.empty:
             st.caption("Tidak ada data untuk filter ini.")
         else:
+            tren["minggu_str"] = pd.to_datetime(tren["minggu"]).dt.strftime("%d %b %Y")
             fig = go.Figure()
             for app in sorted(tren["aplikasi"].unique()):
                 warna = warna_aplikasi(app)
-                pos_s = tren[(tren["aplikasi"] == app) & (tren["label"] == "Positif")].sort_values("bulan")
-                neg_s = tren[(tren["aplikasi"] == app) & (tren["label"] == "Negatif")].sort_values("bulan")
-                # Positif - garis solid dengan titik berisi
+                pos_s = tren[(tren["aplikasi"] == app) & (tren["label"] == "Positif")].sort_values("minggu")
+                neg_s = tren[(tren["aplikasi"] == app) & (tren["label"] == "Negatif")].sort_values("minggu")
                 fig.add_trace(go.Scatter(
-                    x=pos_s["bulan"], y=pos_s["jumlah"], mode="lines+markers",
+                    x=pos_s["minggu"], y=pos_s["jumlah"], mode="lines+markers",
                     name=app, legendgroup=app,
-                    line=dict(color=warna, width=2.2),
+                    line=dict(color=warna, width=2.5, shape="spline"),
                     marker=dict(size=7, color=warna, line=dict(color=warna, width=1)),
-                    hovertemplate=f"<b>{app}</b> (Positif)<br>%{{x}}: %{{y:,}} ulasan<extra></extra>",
+                    hovertemplate=f"<b>{app}</b> · Positif<br>%{{x|%d %b %Y}}<br>%{{y:,}} ulasan<extra></extra>",
                 ))
-                # Negatif - garis putus dengan titik kosong (hollow)
                 fig.add_trace(go.Scatter(
-                    x=neg_s["bulan"], y=neg_s["jumlah"], mode="lines+markers",
+                    x=neg_s["minggu"], y=neg_s["jumlah"], mode="lines+markers",
                     name=app, legendgroup=app, showlegend=False,
-                    line=dict(color=warna, width=2.2, dash="dash"),
+                    line=dict(color=warna, width=2.5, dash="dash", shape="spline"),
                     marker=dict(size=7, color="white", line=dict(color=warna, width=2)),
-                    hovertemplate=f"<b>{app}</b> (Negatif)<br>%{{x}}: %{{y:,}} ulasan<extra></extra>",
+                    hovertemplate=f"<b>{app}</b> · Negatif<br>%{{x|%d %b %Y}}<br>%{{y:,}} ulasan<extra></extra>",
                 ))
-            # Trace dummy untuk legend simbol Positif/Negatif
             fig.add_trace(go.Scatter(
                 x=[None], y=[None], mode="markers",
-                marker=dict(size=9, color="#333", line=dict(color="#333", width=1)),
+                marker=dict(size=10, color="#334155", line=dict(color="#334155", width=1)),
                 name="Positif", legendgroup="legend_sym",
             ))
             fig.add_trace(go.Scatter(
                 x=[None], y=[None], mode="markers",
-                marker=dict(size=9, color="white", line=dict(color="#333", width=2)),
+                marker=dict(size=10, color="white", line=dict(color="#334155", width=2)),
                 name="Negatif", legendgroup="legend_sym",
             ))
             fig.update_layout(
-                xaxis=dict(title="", tickangle=-45, tickfont=dict(size=9), showgrid=False),
-                yaxis=dict(title="", tickfont=dict(size=11), showgrid=True, gridcolor="#eee"),
-                height=360, margin=dict(l=10, r=10, t=10, b=70),
-                legend=dict(orientation="h", yanchor="bottom", y=-0.35, xanchor="center", x=0.5, font=dict(size=10)),
+                xaxis=dict(
+                    title="",
+                    tickfont=dict(size=10, family="Inter"),
+                    showgrid=True, gridcolor="#F8FAFC",
+                    tickformat="%d %b %Y",
+                    nticks=12,
+                    tickangle=-40,
+                ),
+                yaxis=dict(title="", tickfont=dict(size=11, family="Inter"), showgrid=True, gridcolor="#F1F5F9",
+                           tickformat=",d", separatethousands=True),
+                height=380, margin=dict(l=10, r=10, t=10, b=90),
+                legend=dict(orientation="h", yanchor="bottom", y=-0.3, xanchor="center", x=0.5, font=dict(size=10, family="Inter")),
                 paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
                 hovermode="closest",
             )
@@ -833,7 +970,7 @@ def halaman_sentimen() -> None:
 # Halaman: Performa Algoritma
 # ---------------------------------------------------------------------------
 def halaman_performa() -> None:
-    page_title("Perbandingan Performa Algoritma")
+    page_title("Perbandingan Performa Algoritma", "Evaluasi Naive Bayes dan SVM pada data uji")
     perf = performa_semua()
     if perf.empty:
         st.info("Metrik performa belum tersedia pada fact_sentimen (data_uji).")
@@ -863,26 +1000,25 @@ def halaman_performa() -> None:
     )
 
     mulai_kartu("Tabel Perbandingan Metrik Evaluasi (data uji)")
-    # Custom HTML table dengan highlight hijau untuk model terbaik
     header_html = (
-        '<tr style="background:#E8F1F7; color:#0F3F5E;">'
-        '<th style="padding:0.5rem 0.8rem; text-align:left;">Aplikasi</th>'
-        '<th style="padding:0.5rem 0.8rem; text-align:left;">Algoritma</th>'
-        '<th style="padding:0.5rem 0.8rem; text-align:right;">Accuracy</th>'
-        '<th style="padding:0.5rem 0.8rem; text-align:right;">Precision</th>'
-        '<th style="padding:0.5rem 0.8rem; text-align:right;">Recall</th>'
-        '<th style="padding:0.5rem 0.8rem; text-align:right;">F1</th>'
-        '<th style="padding:0.5rem 0.8rem; text-align:right;">Macro-F1</th>'
-        '<th style="padding:0.5rem 0.8rem; text-align:right;">Waktu latih (detik)</th>'
+        '<tr style="background:#F1F5F9; color:#0A3B5E;">'
+        '<th style="padding:0.7rem 0.9rem; text-align:left; font-size:0.78rem; text-transform:uppercase; letter-spacing:0.3px;">Aplikasi</th>'
+        '<th style="padding:0.7rem 0.9rem; text-align:left; font-size:0.78rem; text-transform:uppercase; letter-spacing:0.3px;">Algoritma</th>'
+        '<th style="padding:0.7rem 0.9rem; text-align:right; font-size:0.78rem; text-transform:uppercase; letter-spacing:0.3px;">Accuracy</th>'
+        '<th style="padding:0.7rem 0.9rem; text-align:right; font-size:0.78rem; text-transform:uppercase; letter-spacing:0.3px;">Precision</th>'
+        '<th style="padding:0.7rem 0.9rem; text-align:right; font-size:0.78rem; text-transform:uppercase; letter-spacing:0.3px;">Recall</th>'
+        '<th style="padding:0.7rem 0.9rem; text-align:right; font-size:0.78rem; text-transform:uppercase; letter-spacing:0.3px;">F1</th>'
+        '<th style="padding:0.7rem 0.9rem; text-align:right; font-size:0.78rem; text-transform:uppercase; letter-spacing:0.3px;">Macro-F1</th>'
+        '<th style="padding:0.7rem 0.9rem; text-align:right; font-size:0.78rem; text-transform:uppercase; letter-spacing:0.3px;">Waktu latih (detik)</th>'
         '</tr>'
     )
     baris_html = []
     for _, r in sub.iterrows():
         terbaik = terbaik_per_app.get(r["aplikasi"]) == r["model"]
-        bg = "#E8F7E8" if terbaik else "transparent"
-        warna_teks = "#0F3F5E" if terbaik else "#333"
+        bg = "#ECFDF5" if terbaik else "transparent"
+        warna_teks = "#064E3B" if terbaik else "#334155"
         tebal = "font-weight:600;" if terbaik else ""
-        bintang = ' <span style="color:#F59E0B;">★</span>' if terbaik else ""
+        bintang = ' <span style="color:#F59E0B; font-size:1rem;">★</span>' if terbaik else ""
         acc_s = ("%.4f" % r["accuracy"]).replace(".", ",")
         prec_s = ("%.4f" % r["precision_pos"]).replace(".", ",")
         rec_s = ("%.4f" % r["recall_pos"]).replace(".", ",")
@@ -891,18 +1027,18 @@ def halaman_performa() -> None:
         wl_s = str(r["waktu_latih"]).replace(".", ",") if pd.notna(r["waktu_latih"]) else "-"
         baris_html.append(
             '<tr style="background:' + bg + '; color:' + warna_teks + '; ' + tebal + '">'
-            '<td style="padding:0.5rem 0.8rem; border-top:1px solid #eee;">' + str(r["aplikasi"]) + '</td>'
-            '<td style="padding:0.5rem 0.8rem; border-top:1px solid #eee;">' + str(r["model"]) + bintang + '</td>'
-            '<td style="padding:0.5rem 0.8rem; border-top:1px solid #eee; text-align:right;">' + acc_s + '</td>'
-            '<td style="padding:0.5rem 0.8rem; border-top:1px solid #eee; text-align:right;">' + prec_s + '</td>'
-            '<td style="padding:0.5rem 0.8rem; border-top:1px solid #eee; text-align:right;">' + rec_s + '</td>'
-            '<td style="padding:0.5rem 0.8rem; border-top:1px solid #eee; text-align:right;">' + f1_s + '</td>'
-            '<td style="padding:0.5rem 0.8rem; border-top:1px solid #eee; text-align:right;">' + mf1_s + '</td>'
-            '<td style="padding:0.5rem 0.8rem; border-top:1px solid #eee; text-align:right;">' + wl_s + '</td>'
+            '<td style="padding:0.65rem 0.9rem; border-top:1px solid #E2E8F0;">' + str(r["aplikasi"]) + '</td>'
+            '<td style="padding:0.65rem 0.9rem; border-top:1px solid #E2E8F0;">' + str(r["model"]) + bintang + '</td>'
+            '<td style="padding:0.65rem 0.9rem; border-top:1px solid #E2E8F0; text-align:right;">' + acc_s + '</td>'
+            '<td style="padding:0.65rem 0.9rem; border-top:1px solid #E2E8F0; text-align:right;">' + prec_s + '</td>'
+            '<td style="padding:0.65rem 0.9rem; border-top:1px solid #E2E8F0; text-align:right;">' + rec_s + '</td>'
+            '<td style="padding:0.65rem 0.9rem; border-top:1px solid #E2E8F0; text-align:right;">' + f1_s + '</td>'
+            '<td style="padding:0.65rem 0.9rem; border-top:1px solid #E2E8F0; text-align:right;">' + mf1_s + '</td>'
+            '<td style="padding:0.65rem 0.9rem; border-top:1px solid #E2E8F0; text-align:right;">' + wl_s + '</td>'
             '</tr>'
         )
     st.markdown(
-        '<table style="width:100%; border-collapse:collapse; font-size:0.88rem;">'
+        '<table style="width:100%; border-collapse:collapse; font-size:0.88rem; font-family:Inter;">'
         + '<thead>' + header_html + '</thead>'
         + '<tbody>' + "".join(baris_html) + '</tbody>'
         + '</table>',
@@ -916,22 +1052,22 @@ def halaman_performa() -> None:
         mulai_kartu("Grafik Macro-F1 per Aplikasi")
         fig = px.bar(
             perf, x="aplikasi", y="macro_f1", color="model",
-            color_discrete_map={"Naive Bayes": "#A6C9E8", "SVM": HD_DARK,
-                                "Complement Naive Bayes": "#A6C9E8",
-                                "Naive Bayes (Complement)": "#A6C9E8",
+            color_discrete_map={"Naive Bayes": "#93C5FD", "SVM": HD_DARK,
+                                "Complement Naive Bayes": "#93C5FD",
+                                "Naive Bayes (Complement)": "#93C5FD",
                                 "SVM (kernel linear)": HD_DARK},
             barmode="group",
             text=perf["macro_f1"].apply(lambda v: f"{v:.4f}".replace(".", ",")),
         )
-        fig.update_traces(textposition="outside", textfont=dict(size=10))
+        fig.update_traces(textposition="outside", textfont=dict(size=10, family="Inter"))
         fig.update_layout(
-            xaxis=dict(title="", tickfont=dict(size=12)),
-            yaxis=dict(range=[0, 1.1], title="Macro-F1", tickfont=dict(size=11)),
+            xaxis=dict(title="", tickfont=dict(size=12, family="Inter")),
+            yaxis=dict(range=[0, 1.1], title="Macro-F1", tickfont=dict(size=11, family="Inter")),
             height=340, margin=dict(l=10, r=10, t=10, b=10),
             legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1, title=""),
             paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
         )
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
         tutup_kartu()
 
     with col_rek:
@@ -946,12 +1082,10 @@ def halaman_performa() -> None:
             selisih = f"{(tb['macro_f1'] - kedua['macro_f1']):.4f}".replace(".", ",") if kedua is not None else ""
             warna = warna_aplikasi(app)
             st.markdown(
-                f"""
-                <div style="padding:0.7rem 0.9rem; margin-bottom:0.5rem; border-left:4px solid {warna}; background:#F8F5F3; border-radius:4px;">
-                    <div style="color:{HD_DARK}; font-weight:700;">{app}: {tb['model']}</div>
-                    <div style="color:#555; font-size:0.85rem;">macro-F1 {f1}{f' vs {f1k}' if kedua is not None else ''}{f', selisih {selisih}' if kedua is not None else ''}.</div>
-                </div>
-                """,
+                f'<div style="padding:0.9rem 1rem; margin-bottom:0.6rem; border-left:4px solid {warna}; background:#F8FAFC; border-radius:6px;">'
+                f'<div style="color:{HD_DARK}; font-weight:700; margin-bottom:0.2rem;">{app}: {tb["model"]}</div>'
+                f'<div style="color:#64748B; font-size:0.85rem;">macro-F1 {f1}{f" vs {f1k}" if kedua is not None else ""}{f", selisih {selisih}" if kedua is not None else ""}</div>'
+                f'</div>',
                 unsafe_allow_html=True,
             )
         tutup_kartu()
@@ -961,7 +1095,7 @@ def halaman_performa() -> None:
 # Halaman: Admin
 # ---------------------------------------------------------------------------
 def halaman_admin(user: dict) -> None:
-    page_title("Halaman Admin")
+    page_title("Halaman Admin", "Unggah data ulasan baru dan kelola pengguna")
     data = ringkasan_global()
 
     mulai_kartu("Unggah Data Ulasan Baru")
@@ -1009,9 +1143,7 @@ def halaman_admin(user: dict) -> None:
         if submit:
             ok, pesan = tambah_akun(u, p, r)
             if ok:
-                st.success(pesan)
-                daftar_pengguna.clear()
-                st.rerun()
+                st.success(pesan); daftar_pengguna.clear(); st.rerun()
             else: st.error(pesan)
     with tab2:
         if not pengguna.empty:
@@ -1024,9 +1156,7 @@ def halaman_admin(user: dict) -> None:
                 id_user = int(pengguna[pengguna["username"] == pilih]["id"].iloc[0])
                 ok, pesan = ubah_akun(id_user, p_baru, r_baru)
                 if ok:
-                    st.success(pesan)
-                    daftar_pengguna.clear()
-                    st.rerun()
+                    st.success(pesan); daftar_pengguna.clear(); st.rerun()
                 else: st.error(pesan)
     with tab3:
         if not pengguna.empty:
@@ -1037,9 +1167,7 @@ def halaman_admin(user: dict) -> None:
                     id_user = int(pengguna[pengguna["username"] == pilih]["id"].iloc[0])
                     ok, pesan = hapus_akun(id_user)
                     if ok:
-                        st.success(pesan)
-                        daftar_pengguna.clear()
-                        st.rerun()
+                        st.success(pesan); daftar_pengguna.clear(); st.rerun()
                     else: st.error(pesan)
             else:
                 st.info("Tidak ada pengguna lain untuk dihapus.")
@@ -1107,20 +1235,22 @@ def proses_unggahan(user: dict, aplikasi: str, berkas) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Login
+# Login modern
 # ---------------------------------------------------------------------------
 def halaman_login() -> None:
+    st.markdown('<div class="login-wrapper">', unsafe_allow_html=True)
     st.markdown('<div class="login-card">', unsafe_allow_html=True)
+    st.markdown('<div class="login-logo">📊</div>', unsafe_allow_html=True)
     st.markdown(
         '<div class="login-title">Dashboard Analisis Sentimen</div>'
-        '<div class="login-subtitle">Instagram, TikTok, dan X (Google Play Store)</div>',
+        '<div class="login-subtitle">Instagram, TikTok, dan X &middot; Google Play Store</div>',
         unsafe_allow_html=True,
     )
     tab_masuk, tab_daftar = st.tabs(["Masuk", "Daftar"])
     with tab_masuk:
         with st.form("form_masuk", clear_on_submit=False):
-            u = st.text_input("Username", key="masuk_u")
-            p = st.text_input("Password", type="password", key="masuk_p")
+            u = st.text_input("Username", key="masuk_u", placeholder="masukkan username")
+            p = st.text_input("Password", type="password", key="masuk_p", placeholder="masukkan password")
             submit = st.form_submit_button("Masuk", use_container_width=True, type="primary")
         if submit:
             if not u or not p:
@@ -1134,16 +1264,16 @@ def halaman_login() -> None:
                     st.rerun()
     with tab_daftar:
         with st.form("form_daftar", clear_on_submit=True):
-            u = st.text_input("Username baru", key="daftar_u")
-            p = st.text_input("Password", type="password", key="daftar_p")
-            k = st.text_input("Konfirmasi password", type="password", key="daftar_k")
+            u = st.text_input("Username baru", key="daftar_u", placeholder="pilih username unik")
+            p = st.text_input("Password", type="password", key="daftar_p", placeholder="minimal 6 karakter")
+            k = st.text_input("Konfirmasi password", type="password", key="daftar_k", placeholder="ulangi password")
             submit = st.form_submit_button("Daftar", use_container_width=True, type="primary")
         if submit:
             ok, pesan = daftar(u, p, k)
             if ok: st.success(pesan)
             else: st.error(pesan)
         st.caption("Akun baru otomatis berperan Pengguna.")
-    st.markdown('</div>', unsafe_allow_html=True)
+    st.markdown('</div></div>', unsafe_allow_html=True)
 
 
 # ---------------------------------------------------------------------------
@@ -1156,7 +1286,13 @@ def aplikasi_utama() -> None:
         opsi.append("Admin")
 
     with st.sidebar:
-        st.markdown('<div class="sidebar-brand">📊 Dashboard Analisis Sentimen</div>', unsafe_allow_html=True)
+        st.markdown(
+            '<div class="sidebar-brand">'
+            '<div class="sidebar-brand-icon">📊</div>'
+            '<div>Analisis Sentimen</div>'
+            '</div>',
+            unsafe_allow_html=True,
+        )
         aktif = st.session_state.get("halaman_aktif", "Ringkasan")
         if aktif not in opsi: aktif = "Ringkasan"
         pilihan = st.radio("Menu", opsi, index=opsi.index(aktif), key="nav_radio", label_visibility="collapsed")
@@ -1164,8 +1300,12 @@ def aplikasi_utama() -> None:
             st.session_state["halaman_aktif"] = pilihan
             st.rerun()
         st.markdown("<div style='height:2rem'></div>", unsafe_allow_html=True)
-        st.markdown(f"<div style='color:#6B7A8F; font-size:0.85rem; padding:0 0.4rem;'>Masuk sebagai "
-                    f"<b>{user['username']}</b> ({user['role']})</div>", unsafe_allow_html=True)
+        st.markdown(
+            f'<div style="color:#64748B; font-size:0.82rem; padding:0 0.6rem 0.4rem 0.6rem;">Masuk sebagai</div>'
+            f'<div style="color:#0A3B5E; font-weight:700; font-size:0.95rem; padding:0 0.6rem 0.2rem 0.6rem;">{user["username"]}</div>'
+            f'<div style="color:#64748B; font-size:0.78rem; padding:0 0.6rem 0.8rem 0.6rem;">Peran: {user["role"]}</div>',
+            unsafe_allow_html=True,
+        )
         if st.button("Keluar", use_container_width=True):
             st.session_state.pop("user", None)
             st.rerun()
